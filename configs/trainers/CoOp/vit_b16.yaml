@@ -1,0 +1,32 @@
+DATALOADER:  # 数据加载器相关配置
+  TRAIN_X:  # 训练集数据加载设置
+    BATCH_SIZE: 32  # 每次训练的批次大小，即每次输入32个样本
+  TEST:  # 测试集数据加载设置
+    BATCH_SIZE: 100  # 每次测试的批次大小，输入100个样本进行测试
+  NUM_WORKERS: 8  # 数据加载时使用的线程数（加速数据读取过程）
+
+INPUT:  # 输入数据相关设置
+  SIZE: (224, 224)  # 输入图片的尺寸，固定为224x224像素
+  INTERPOLATION: "bicubic"  # 图片缩放时使用的插值方法，这里使用双三次插值
+  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]  # 用于图像标准化的像素均值，针对各通道（RGB）
+  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]  # 用于图像标准化的像素标准差，针对各通道（RGB）
+  TRANSFORMS: ["random_resized_crop", "random_flip", "normalize"]  # 数据增强方法，包括随机裁剪、随机水平翻转和标准化
+
+OPTIM:  # 优化器相关配置
+  NAME: "sgd"  # 使用的优化算法，这里使用随机梯度下降（SGD）
+  LR: 0.002  # 学习率，控制模型更新参数的步长
+  MAX_EPOCH: 10  # 最大训练轮数，即模型将训练10个完整的训练集轮次
+  LR_SCHEDULER: "cosine"  # 学习率调度器，使用余弦退火来调整学习率
+  WARMUP_EPOCH: 1  # 预热轮数，在最开始的1个epoch中，逐渐增加学习率
+  WARMUP_TYPE: "constant"  # 预热期间的学习率类型，这里使用固定学习率
+  WARMUP_CONS_LR: 1e-5  # 预热期间的固定学习率值，即1e-5
+
+TRAIN:  # 训练过程中的配置
+  PRINT_FREQ: 5  # 训练中日志打印的频率，每隔5个批次打印一次训练信息
+
+TEST:
+  FINAL_MODEL: "best_val"
+
+MODEL:  # 模型相关配置
+  BACKBONE:  # 主干网络（backbone）的设置
+    NAME: "ViT-B/16"  # 使用的主干网络模型，这里是ViT-B/16（Vision Transformer）
