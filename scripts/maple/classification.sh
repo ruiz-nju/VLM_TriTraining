@@ -21,4 +21,5 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
     --config-file configs/trainers/${TRAINER}/${CFG}.yaml \
     --output-dir ${DIR} \
     DATASET.NUM_SHOTS ${SHOTS}\
-    DATASET.SUBSAMPLE_CLASSES all
+    DATASET.SUBSAMPLE_CLASSES all \
+    TRAINER.MODAL classification \

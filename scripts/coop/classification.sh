@@ -28,5 +28,6 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
     --output-dir ${DIR} \
     DATASET.NUM_SHOTS ${SHOTS}\
     DATASET.SUBSAMPLE_CLASSES all \
+    TRAINER.MODAL classification \
 
 # 通过 opts 传入的参数，会在 setup_cfg 中通过 cfg.merge_from_list(args.opts) 来动态修改配置

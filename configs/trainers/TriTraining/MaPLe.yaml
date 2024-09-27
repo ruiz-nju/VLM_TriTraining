@@ -168,7 +168,7 @@ TRAINER:
     WEIGHT_U: 100.0
   MME:
     LMDA: 0.1
-  MODAL: base2novel
+  MODAL: classification
   NAME: MaPLe
   SE:
     CONF_THRE: 0.95
