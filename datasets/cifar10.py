@@ -72,6 +72,7 @@ class CIFAR10(DatasetBase):
         for dir in [self.image_train_dir, self.image_test_dir]:
             categories = listdir_nohidden(dir)
             categories = [c for c in categories]
+            # 按照默认的字典序升序标号
             categories.sort()
             for label, category in enumerate(categories):
                 category_dir = os.path.join(dir, category)

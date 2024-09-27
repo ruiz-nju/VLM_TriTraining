@@ -260,8 +260,8 @@ class CoOp(TrainerX):
 
     def fit(self, image, label):
         self.set_model_mode("train")
-        # print(f"Number of images: {len(image)}")
-        image = image.to(self.device)  # torch.Size([num_of_images, 3, 224, 224])
+        # 该接口要求 image 的 shape 为 torch.Size([batch_size, 3, 224, 224])
+        image = image.to(self.device)  # torch.Size([batch_size, 3, 224, 224])
         label = label.to(self.device)
         prec = self.cfg.TRAINER.COOP.PREC
         if prec == "amp":
@@ -277,6 +277,15 @@ class CoOp(TrainerX):
             loss = F.cross_entropy(output, label)
             print(f"loss: {loss}")
             self.model_backward_and_update(loss)
+
+    def predict(self, image):
+        self.set_model_mode("eval")
+        image = image.to(self.device)
+        with torch.no_grad():
+            # print(image.shape)  # torch.Size([32, 3, 224, 224])
+            output = self.model(image)
+            output = output.max(1)[1]
+        return output
 
     def check_cfg(self, cfg):
         assert cfg.TRAINER.COOP.PREC in ["fp16", "fp32", "amp"]

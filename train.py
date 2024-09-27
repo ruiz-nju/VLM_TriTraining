@@ -167,13 +167,14 @@ def main(args):
     if torch.cuda.is_available() and cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
 
-    print_args(args, cfg)
-    # pdb.set_trace()
+    # print_args(args, cfg)
     # print("Collecting env info ...")
     # print("** System info **\n{}\n".format(collect_env_info()))
 
     trainer = build_trainer(cfg)
-
+    print("---------------------------------------------")
+    print(cfg)
+    print("---------------------------------------------")
     if args.eval_only:
         trainer.load_model(args.model_dir, epoch=args.load_epoch)
         trainer.test()
@@ -182,6 +183,15 @@ def main(args):
     if not args.no_train:
 
         trainer.train()
+
+        # for trainer.batch_idx, batch in enumerate(trainer.train_loader_x):
+        #     images, labels = trainer.parse_batch_train(batch)
+        #     pred = trainer.predict(images)
+        #     print(pred)
+        #     print(labels)
+        #     print(pred == labels)
+        #     return
+
         # for trainer.batch_idx, batch in enumerate(trainer.train_loader_x):
         #     print(f"batch_idx: {trainer.batch_idx}")
         #     images, labels = trainer.parse_batch_train(batch)
