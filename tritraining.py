@@ -1,9 +1,15 @@
 import argparse
+import sklearn.utils
 import torch
 
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
 from dassl.config import get_cfg_default
 from dassl.engine import build_trainer
+import copy
+import numpy as np
+import sklearn
+from LAMDA_SSL.Dataset.Vision.CIFAR10 import CIFAR10
+from LAMDA_SSL.Evaluation.Classifier.Accuracy import Accuracy
 
 # custom
 import datasets.oxford_pets
@@ -25,9 +31,12 @@ import datasets.cifar10
 
 import trainers.coop
 import trainers.cocoop
+import trainers.tri_training
 import trainers.zsclip
 import trainers.maple
 import trainers.vpt
+from trainers.tri_training import Tri_Training
+import torchvision.transforms as T
 
 
 def extend_cfg(cfg):
@@ -72,6 +81,24 @@ def extend_cfg(cfg):
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
 
+def get_dataset():
+    dataset = CIFAR10(root="/mnt/hdd/zhurui/data", labeled_size=0.1, shuffle=True)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    labeled_X, labeled_y = dataset.labeled_X, dataset.labeled_y
+    labeled_X = torch.tensor(labeled_X, device=device)
+    labeled_X = torch.permute(labeled_X, (0, 3, 1, 2))
+    labeled_X = T.Resize((224, 224))(labeled_X)
+    labeled_y = torch.tensor(labeled_y, device=device)
+    unlabeled_X = dataset.unlabeled_X
+    unlabeled_X = torch.tensor(unlabeled_X, device=device)
+    test_X, test_y = dataset.test_X, dataset.test_y
+    test_X = torch.tensor(test_X, device=device)
+    test_X = torch.permute(test_X, (0, 3, 1, 2))
+    test_X = T.Resize((224, 224))(test_X)
+    test_y = torch.tensor(test_y, device=device)
+    return labeled_X, labeled_y, unlabeled_X, test_X, test_y
+
+
 if __name__ == "__main__":
     print("----------Build up cfg----------")
     cfg_coop = get_cfg_default()
@@ -98,3 +125,12 @@ if __name__ == "__main__":
     vpt = build_trainer(cfg_vpt)
     print("----------Build up MaPLe----------")
     maple = build_trainer(cfg_maple)
+
+    tri_trainer = Tri_Training(coop, vpt, maple)
+    labeled_X, labeled_y, unlabeled_X, test_X, test_y = get_dataset()
+    # print(labeled_X.shape)
+    # print(len(labeled_y))
+    tri_trainer.fit(labeled_X, labeled_y, unlabeled_X)
+    y_pred = tri_trainer.predict(test_X)
+    acc = Accuracy()
+    print(acc.score(y_pred, test_y))

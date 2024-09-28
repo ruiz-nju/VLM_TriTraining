@@ -251,3 +251,32 @@ class VPT(TrainerX):
             )
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
+
+    def fit(self, image, label):
+        self.set_model_mode("train")
+        # 该接口要求 image 的 shape 为 torch.Size([batch_size, 3, 224, 224])
+        image = image.to(self.device)  # torch.Size([batch_size, 3, 224, 224])
+        label = label.to(self.device)
+        prec = self.cfg.TRAINER.COOP.PREC
+        if prec == "amp":
+            with autocast():
+                output = self.model(image)
+                loss = F.cross_entropy(output, label)
+            self.optim.zero_grad()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optim)
+            self.scaler.update()
+        else:
+            output = self.model(image)
+            loss = F.cross_entropy(output, label)
+            print(f"loss: {loss}")
+            self.model_backward_and_update(loss)
+
+    def predict(self, image):
+        self.set_model_mode("eval")
+        image = image.to(self.device)
+        with torch.no_grad():
+            # print(image.shape)  # torch.Size([32, 3, 224, 224])
+            output = self.model(image)
+            output = output.max(1)[1]
+        return output
