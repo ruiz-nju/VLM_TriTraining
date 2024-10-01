@@ -4,15 +4,15 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.cuda.amp import GradScaler, autocast
-
+from tqdm import tqdm
 from dassl.engine import TRAINER_REGISTRY, TrainerX
 from dassl.metrics import compute_accuracy
 from dassl.utils import load_pretrained_weights, load_checkpoint
 from dassl.optim import build_optimizer, build_lr_scheduler
-
+from torch.utils.data import DataLoader, TensorDataset
+import torchvision.transforms as T
 from clip import clip
 from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
-
 from dassl.utils import (
     MetricMeter,
     AverageMeter,
@@ -258,35 +258,6 @@ class CoOp(TrainerX):
     https://arxiv.org/abs/2109.01134
     """
 
-    def fit(self, image, label):
-        self.set_model_mode("train")
-        # 该接口要求 image 的 shape 为 torch.Size([batch_size, 3, 224, 224])
-        image = image.to(self.device)  # torch.Size([batch_size, 3, 224, 224])
-        label = label.to(self.device)
-        prec = self.cfg.TRAINER.COOP.PREC
-        if prec == "amp":
-            with autocast():
-                output = self.model(image)
-                loss = F.cross_entropy(output, label)
-            self.optim.zero_grad()
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optim)
-            self.scaler.update()
-        else:
-            output = self.model(image)
-            loss = F.cross_entropy(output, label)
-            print(f"loss: {loss}")
-            self.model_backward_and_update(loss)
-
-    def predict(self, image):
-        self.set_model_mode("eval")
-        image = image.to(self.device)
-        with torch.no_grad():
-            # print(image.shape)  # torch.Size([32, 3, 224, 224])
-            output = self.model(image)
-            output = output.max(1)[1]
-        return output
-
     def check_cfg(self, cfg):
         assert cfg.TRAINER.COOP.PREC in ["fp16", "fp32", "amp"]
 
@@ -403,3 +374,70 @@ class CoOp(TrainerX):
             )
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
+
+    def fit(self, X, y, batch_size=32):
+        self.set_model_mode("train")
+        X = torch.tensor(X)
+        X = torch.permute(X, (0, 3, 2, 1))
+        X = T.Resize((224, 224))(X)
+        y = torch.tensor(y)
+
+        # 使用 TensorDataset 将 X 和 y 进行打包
+        dataset = TensorDataset(X, y)
+        # 使用 DataLoader 创建数据加载器，进行批次处理
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        prec = self.cfg.TRAINER.COOP.PREC
+        for epoch in range(self.max_epoch):
+            print(f"Epoch: {epoch + 1}")
+            # 迭代 dataloader 中的每个批次
+            batch_idx = 0
+            for batch_X, batch_y in dataloader:
+                batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
+
+                if prec == "amp":
+                    with autocast():
+                        output = self.model(batch_X)
+                        loss = F.cross_entropy(output, batch_y)
+                    self.optim.zero_grad()
+                    self.scaler.scale(loss).backward()
+                    self.scaler.step(self.optim)
+                    self.scaler.update()
+                else:
+                    output = self.model(batch_X)
+                    loss = F.cross_entropy(output, batch_y)
+                    self.model_backward_and_update(loss)
+                if (batch_idx + 1) == len(dataloader):
+                    self.update_lr()
+                # 在每个 batch 处理完后，释放显存
+                torch.cuda.empty_cache()
+                batch_idx += 1
+                acc = compute_accuracy(output, batch_y)[0].item()
+                print(f"batch: {batch_idx}, loss: {loss.item()}, acc: {acc}")
+            print(f"learning rate: {self.get_current_lr()}")
+            self.update_lr()
+
+    def predict(self, X, batch_size=100):
+        self.set_model_mode("eval")
+        X = torch.tensor(X)
+        X = torch.permute(X, (0, 3, 1, 2))
+        X = T.Resize((224, 224))(X)
+
+        dataset = TensorDataset(X)  # 只需要 X, 不需要 y
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+        all_outputs = []
+
+        # print("CoOp X:", X.shape)
+        with torch.no_grad():
+            for batch_X in tqdm(dataloader):
+                batch_X = batch_X[0].to(self.device)  # 从 dataloader 中取出 batch_X
+                output = self.model(batch_X)
+                output = output.max(1)[1]
+                all_outputs.append(output.cpu())  # 移动到 CPU，避免占用 GPU 显存
+
+            # print("CoOp all_output:", len(all_outputs))
+
+        # 将所有 batch 的预测结果拼接成一个完整的 tensor
+        all_outputs = torch.cat(all_outputs, dim=0)
+
+        return all_outputs

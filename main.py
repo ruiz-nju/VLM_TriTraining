@@ -36,7 +36,8 @@ import trainers.zsclip
 import trainers.maple
 import trainers.vpt
 from trainers.tri_training import Tri_Training
-import torchvision.transforms as T
+
+from torch.utils.data import DataLoader, TensorDataset
 
 
 def extend_cfg(cfg):
@@ -44,9 +45,7 @@ def extend_cfg(cfg):
     from yacs.config import CfgNode as CN
 
     # Config for CoOp
-    cfg.TRAINER.COOP = (
-        CN()
-    )  # 创建一个可用于配置的字典节点，可以看作是一个增强版的 Python 字典，持层次化配置和递归嵌套
+    cfg.TRAINER.COOP = CN()
     cfg.TRAINER.COOP.N_CTX = 16  # number of context vectors
     cfg.TRAINER.COOP.CSC = False  # class-specific context
     cfg.TRAINER.COOP.CTX_INIT = ""  # initialization words
@@ -83,23 +82,23 @@ def extend_cfg(cfg):
 
 def get_dataset():
     dataset = CIFAR10(root="/mnt/hdd/zhurui/data", labeled_size=0.1, shuffle=True)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     labeled_X, labeled_y = dataset.labeled_X, dataset.labeled_y
-    labeled_X = torch.tensor(labeled_X, device=device)
-    labeled_X = torch.permute(labeled_X, (0, 3, 1, 2))
-    labeled_X = T.Resize((224, 224))(labeled_X)
-    labeled_y = torch.tensor(labeled_y, device=device)
     unlabeled_X = dataset.unlabeled_X
-    unlabeled_X = torch.tensor(unlabeled_X, device=device)
     test_X, test_y = dataset.test_X, dataset.test_y
-    test_X = torch.tensor(test_X, device=device)
-    test_X = torch.permute(test_X, (0, 3, 1, 2))
-    test_X = T.Resize((224, 224))(test_X)
-    test_y = torch.tensor(test_y, device=device)
+    # print("labeled_X shape: ", labeled_X.shape)
+    # print("unlabeled_X shape: ", unlabeled_X.shape)
+    # print("test_X shape: ", test_X.shape)
     return labeled_X, labeled_y, unlabeled_X, test_X, test_y
 
 
 if __name__ == "__main__":
+    parser = (
+        argparse.ArgumentParser()
+    )  # 创建一个 ArgumentParser 对象，用来处理命令行输入
+    parser.add_argument("--fit_epoch", type=int, help="set the ")
+    args = (
+        parser.parse_args()
+    )  # 解析命令行传入的参数，并将它们存储在一个命名空间对象 args 中
     print("----------Build up cfg----------")
     cfg_coop = get_cfg_default()
     cfg_vpt = get_cfg_default()
@@ -116,6 +115,9 @@ if __name__ == "__main__":
     cfg_maple.merge_from_file(
         "/mnt/hdd/zhurui/code/CoOp/configs/trainers/TriTraining/MaPLe.yaml"
     )
+    cfg_coop.OPTIM.MAX_EPOCH = args.fit_epoch
+    cfg_vpt.OPTIM.MAX_EPOCH = args.fit_epoch
+    cfg_maple.OPTIM.MAX_EPOCH = args.fit_epoch
     cfg_coop.freeze()
     cfg_vpt.freeze()
     cfg_maple.freeze()
@@ -126,11 +128,16 @@ if __name__ == "__main__":
     print("----------Build up MaPLe----------")
     maple = build_trainer(cfg_maple)
 
-    tri_trainer = Tri_Training(coop, vpt, maple)
+    # 获取数据集
     labeled_X, labeled_y, unlabeled_X, test_X, test_y = get_dataset()
-    # print(labeled_X.shape)
-    # print(len(labeled_y))
+
+    # # 实例化 Tri_Training 并进行训练和测试
+    tri_trainer = Tri_Training(coop, vpt, maple)
+
     tri_trainer.fit(labeled_X, labeled_y, unlabeled_X)
+
     y_pred = tri_trainer.predict(test_X)
+
+    # 计算准确率
     acc = Accuracy()
     print(acc.score(y_pred, test_y))

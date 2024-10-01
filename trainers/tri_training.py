@@ -3,6 +3,7 @@ import sklearn
 from LAMDA_SSL.Base.InductiveEstimator import InductiveEstimator
 from sklearn.base import ClassifierMixin
 from torch.utils.data.dataset import Dataset
+import pdb
 
 
 class Tri_Training:
@@ -10,7 +11,9 @@ class Tri_Training:
         self.estimators = [base_estimator_1, base_estimator_2, base_estimator_3]
 
     def measure_error(self, X, y, j, k):
+        print("measure error:", j)
         j_pred = self.estimators[j].predict(X)
+        print("measure error:", k)
         k_pred = self.estimators[k].predict(X)
         wrong_index = np.logical_and(j_pred != y, k_pred == j_pred)
         return sum(wrong_index) / sum(j_pred == k_pred)
@@ -30,12 +33,15 @@ class Tri_Training:
         while improve:
             iter += 1
             print("iteration:", iter)
+            # pdb.set_trace()
             for i in range(3):
                 j, k = np.delete(np.array([0, 1, 2]), i)
                 update[i] = False
                 e[i] = self.measure_error(X, y, j, k)
                 if e[i] < e_prime[i]:
+                    print("predicting:", j)
                     ulb_y_j = self.estimators[j].predict(unlabeled_X)
+                    print("predicting:", k)
                     ulb_y_k = self.estimators[k].predict(unlabeled_X)
                     lb_X[i] = unlabeled_X[ulb_y_j == ulb_y_k]
                     lb_y[i] = ulb_y_j[ulb_y_j == ulb_y_k]
@@ -63,7 +69,9 @@ class Tri_Training:
         return
 
     def predict(self, X):
-        pred = np.asarray([self.estimators[i].predict(X) for i in range(3)])
+        print(f"predicting {len(X)} samples")
+        output = [self.estimators[i].predict(X).cpu().numpy() for i in range(3)]
+        pred = np.asarray(output)
         pred[0][pred[1] == pred[2]] = pred[1][pred[1] == pred[2]]
         y_pred = pred[0]
         return y_pred

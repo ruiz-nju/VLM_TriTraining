@@ -69,7 +69,7 @@ OPTIM:
   GAMMA: 0.1
   LR: 0.0025
   LR_SCHEDULER: cosine
-  MAX_EPOCH: 2
+  MAX_EPOCH: 3
   MOMENTUM: 0.9
   NAME: sgd
   NEW_LAYERS: ()
@@ -84,7 +84,7 @@ OPTIM:
   WARMUP_RECOUNT: True
   WARMUP_TYPE: constant
   WEIGHT_DECAY: 0.0005
-OUTPUT_DIR: output/cifar10/VPT/base2novel_train/vit_b16/shots_0/seed_1
+OUTPUT_DIR: output/cifar10/TriTraining/VPT/classification/vit_b16/shots_0/seed_1
 RESUME: 
 SEED: 1
 TEST:

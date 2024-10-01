@@ -11,9 +11,15 @@ from torch.utils.tensorboard import SummaryWriter
 from dassl.data import DataManager
 from dassl.optim import build_optimizer, build_lr_scheduler
 from dassl.utils import (
-    MetricMeter, AverageMeter, tolist_if_not, count_num_param, load_checkpoint,
-    save_checkpoint, mkdir_if_missing, resume_from_checkpoint,
-    load_pretrained_weights
+    MetricMeter,
+    AverageMeter,
+    tolist_if_not,
+    count_num_param,
+    load_checkpoint,
+    save_checkpoint,
+    mkdir_if_missing,
+    resume_from_checkpoint,
+    load_pretrained_weights,
 )
 from dassl.modeling import build_head, build_backbone
 from dassl.evaluation import build_evaluator
@@ -85,19 +91,13 @@ class TrainerBase:
 
     def register_model(self, name="model", model=None, optim=None, sched=None):
         if self.__dict__.get("_models") is None:
-            raise AttributeError(
-                "Cannot assign model before super().__init__() call"
-            )
+            raise AttributeError("Cannot assign model before super().__init__() call")
 
         if self.__dict__.get("_optims") is None:
-            raise AttributeError(
-                "Cannot assign optim before super().__init__() call"
-            )
+            raise AttributeError("Cannot assign optim before super().__init__() call")
 
         if self.__dict__.get("_scheds") is None:
-            raise AttributeError(
-                "Cannot assign sched before super().__init__() call"
-            )
+            raise AttributeError("Cannot assign sched before super().__init__() call")
 
         assert name not in self._models, "Found duplicate model names"
 
@@ -137,7 +137,7 @@ class TrainerBase:
                     "epoch": epoch + 1,
                     "optimizer": optim_dict,
                     "scheduler": sched_dict,
-                    "val_result": val_result
+                    "val_result": val_result,
                 },
                 osp.join(directory, name),
                 is_best=is_best,
@@ -163,8 +163,7 @@ class TrainerBase:
         for name in names:
             path = osp.join(directory, name)
             start_epoch = resume_from_checkpoint(
-                path, self._models[name], self._optims[name],
-                self._scheds[name]
+                path, self._models[name], self._optims[name], self._scheds[name]
             )
 
         return start_epoch
@@ -424,7 +423,8 @@ class SimpleTrainer(TrainerBase):
         do_test = not self.cfg.TEST.NO_TEST
         meet_checkpoint_freq = (
             (self.epoch + 1) % self.cfg.TRAIN.CHECKPOINT_FREQ == 0
-            if self.cfg.TRAIN.CHECKPOINT_FREQ > 0 else False
+            if self.cfg.TRAIN.CHECKPOINT_FREQ > 0
+            else False
         )
 
         if do_test and self.cfg.TEST.FINAL_MODEL == "best_val":
@@ -436,7 +436,7 @@ class SimpleTrainer(TrainerBase):
                     self.epoch,
                     self.output_dir,
                     val_result=curr_result,
-                    model_name="model-best.pth.tar"
+                    model_name="model-best.pth.tar",
                 )
 
         if meet_checkpoint_freq or last_epoch:
@@ -545,9 +545,7 @@ class TrainerXU(SimpleTrainer):
             if meet_freq or only_few_batches:
                 nb_remain = 0
                 nb_remain += self.num_batches - self.batch_idx - 1
-                nb_remain += (
-                    self.max_epoch - self.epoch - 1
-                ) * self.num_batches
+                nb_remain += (self.max_epoch - self.epoch - 1) * self.num_batches
                 eta_seconds = batch_time.avg * nb_remain
                 eta = str(datetime.timedelta(seconds=int(eta_seconds)))
 
@@ -602,9 +600,7 @@ class TrainerX(SimpleTrainer):
             if meet_freq or only_few_batches:
                 nb_remain = 0
                 nb_remain += self.num_batches - self.batch_idx - 1
-                nb_remain += (
-                    self.max_epoch - self.epoch - 1
-                ) * self.num_batches
+                nb_remain += (self.max_epoch - self.epoch - 1) * self.num_batches
                 eta_seconds = batch_time.avg * nb_remain
                 eta = str(datetime.timedelta(seconds=int(eta_seconds)))
 
