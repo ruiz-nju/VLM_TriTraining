@@ -8,6 +8,7 @@ from dassl.utils import read_image
 from .datasets import build_dataset
 from .samplers import build_sampler
 from .transforms import INTERPOLATION_MODES, build_transform
+import pdb
 
 
 def build_data_loader(
@@ -19,7 +20,7 @@ def build_data_loader(
     n_ins=2,
     tfm=None,
     is_train=True,
-    dataset_wrapper=None
+    dataset_wrapper=None,
 ):
     # Build sampler
     sampler = build_sampler(
@@ -28,7 +29,7 @@ def build_data_loader(
         data_source=data_source,
         batch_size=batch_size,
         n_domain=n_domain,
-        n_ins=n_ins
+        n_ins=n_ins,
     )
 
     if dataset_wrapper is None:
@@ -41,7 +42,7 @@ def build_data_loader(
         sampler=sampler,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         drop_last=is_train and len(data_source) >= batch_size,
-        pin_memory=(torch.cuda.is_available() and cfg.USE_CUDA)
+        pin_memory=(torch.cuda.is_available() and cfg.USE_CUDA),
     )
     assert len(data_loader) > 0
 
@@ -51,15 +52,10 @@ def build_data_loader(
 class DataManager:
 
     def __init__(
-        self,
-        cfg,
-        custom_tfm_train=None,
-        custom_tfm_test=None,
-        dataset_wrapper=None
+        self, cfg, custom_tfm_train=None, custom_tfm_test=None, dataset_wrapper=None
     ):
         # Load dataset
         dataset = build_dataset(cfg)
-
         # Build transform
         if custom_tfm_train is None:
             tfm_train = build_transform(cfg, is_train=True)
@@ -83,9 +79,14 @@ class DataManager:
             n_ins=cfg.DATALOADER.TRAIN_X.N_INS,
             tfm=tfm_train,
             is_train=True,
-            dataset_wrapper=dataset_wrapper
+            dataset_wrapper=dataset_wrapper,
         )
-
+        # print(
+        #     dataset.train_x[0].impath,
+        #     dataset.train_x[0].label,
+        #     dataset.train_x[0].domain,
+        #     dataset.train_x[0].classname,
+        # )  # /mnt/hdd/zhurui/data/CIFAR10/test/airplane/test_6574.png 0 0 airplane
         # Build train_loader_u
         train_loader_u = None
         if dataset.train_u:
@@ -109,7 +110,7 @@ class DataManager:
                 n_ins=n_ins_,
                 tfm=tfm_train,
                 is_train=True,
-                dataset_wrapper=dataset_wrapper
+                dataset_wrapper=dataset_wrapper,
             )
 
         # Build val_loader
@@ -122,7 +123,7 @@ class DataManager:
                 batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
                 tfm=tfm_test,
                 is_train=False,
-                dataset_wrapper=dataset_wrapper
+                dataset_wrapper=dataset_wrapper,
             )
 
         # Build test_loader
@@ -133,7 +134,7 @@ class DataManager:
             batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
             tfm=tfm_test,
             is_train=False,
-            dataset_wrapper=dataset_wrapper
+            dataset_wrapper=dataset_wrapper,
         )
 
         # Attributes
@@ -208,9 +209,7 @@ class DatasetWrapper(TorchDataset):
         to_tensor += [T.Resize(cfg.INPUT.SIZE, interpolation=interp_mode)]
         to_tensor += [T.ToTensor()]
         if "normalize" in cfg.INPUT.TRANSFORMS:
-            normalize = T.Normalize(
-                mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD
-            )
+            normalize = T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)
             to_tensor += [normalize]
         self.to_tensor = T.Compose(to_tensor)
 
@@ -224,7 +223,7 @@ class DatasetWrapper(TorchDataset):
             "label": item.label,
             "domain": item.domain,
             "impath": item.impath,
-            "index": idx
+            "index": idx,
         }
 
         img0 = read_image(item.impath)

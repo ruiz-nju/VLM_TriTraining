@@ -129,6 +129,10 @@ class CIFAR10(SemiDataset, VisionMixin):
             data = pickle.load(infile, encoding="latin1")
             self.classes = data[self.meta["key"]]
         self.class_to_idx = {_class: i for i, _class in enumerate(self.classes)}
+        # print(
+        #     self.class_to_idx
+        # )  # {'airplane': 0, 'automobile': 1, 'bird': 2, 'cat': 3, 'deer': 4, 'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9}
+        # pdb.set_trace()
 
     def _check_integrity(self) -> bool:
         root = self.root
@@ -222,6 +226,9 @@ class CIFAR10(SemiDataset, VisionMixin):
             transform=self.transform,
             target_transform=self.target_transform,
         )
+        # print(self.pre_transform)
+        # print(self.transform)
+        # pdb.set_trace()
         labeled_dataset.init_dataset(labeled_X, labeled_y)
         unlabeled_dataset = UnlabeledDataset(
             pre_transform=self.pre_transform, transform=self.unlabeled_transform

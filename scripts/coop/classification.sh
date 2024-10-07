@@ -15,7 +15,7 @@ SEED=$4 # random seed
 # NCTX=$5  # number of context tokens 默认为 16
 # CSC=$6  # class-specific context (False or True) 默认为 False
 
-# eg. bash scripts/coop/base2novel_train.sh caltech101 vit_b16 16 1
+# eg. bash scripts/coop/classification.sh cifar10 vit_b16 1 1
 
 
 DIR=output/${DATASET}/${TRAINER}/classification/${CFG}/shots_${SHOTS}/seed_${SEED}

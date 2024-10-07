@@ -74,6 +74,10 @@ class CIFAR10(DatasetBase):
             categories = [c for c in categories]
             # 按照默认的字典序升序标号
             categories.sort()
+            # print(
+            #     categories
+            # )  # ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+            # pdb.set_trace()
             for label, category in enumerate(categories):
                 category_dir = os.path.join(dir, category)
                 images = listdir_nohidden(category_dir)

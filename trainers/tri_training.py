@@ -1,8 +1,5 @@
 import numpy as np
 import sklearn
-from LAMDA_SSL.Base.InductiveEstimator import InductiveEstimator
-from sklearn.base import ClassifierMixin
-from torch.utils.data.dataset import Dataset
 import pdb
 
 
@@ -11,12 +8,41 @@ class Tri_Training:
         self.estimators = [base_estimator_1, base_estimator_2, base_estimator_3]
 
     def measure_error(self, X, y, j, k):
-        print("measure error:", j)
+        # 输出模型 j 和 k 的编号
+        print(f"Measuring error between model {j} and model {k}")
+
+        # 获取模型 j 和 k 的预测结果
         j_pred = self.estimators[j].predict(X)
-        print("measure error:", k)
         k_pred = self.estimators[k].predict(X)
+
+        # 输出部分预测结果，方便查看
+        print(f"Model {j} predictions (first 10): {j_pred[:10]}")
+        print(f"Model {k} predictions (first 10): {k_pred[:10]}")
+
+        # 计算错误索引：模型 j 错误预测但 k 和 j 预测一致的样本
         wrong_index = np.logical_and(j_pred != y, k_pred == j_pred)
-        return sum(wrong_index) / sum(j_pred == k_pred)
+
+        # 输出错误样本数及其占比
+        print(
+            f"Number of samples where model {j} is wrong but {k} agrees: {sum(wrong_index)}"
+        )
+
+        # 计算模型 j 和 k 预测一致的样本总数
+        same_pred_count = sum(j_pred == k_pred)
+        print(
+            f"Number of samples where both models predict the same: {same_pred_count}"
+        )
+
+        # 如果没有相同预测，避免除以零
+        if same_pred_count == 0:
+            print("No samples where both models predict the same, returning 0")
+            return 0
+
+        # 返回模型 j 出错但 k 同意预测的比例
+        error_rate = sum(wrong_index) / same_pred_count
+        print(f"Error rate for model {j} when both models agree: {error_rate}")
+
+        return error_rate
 
     def fit(self, X, y, unlabeled_X):
         for i in range(3):

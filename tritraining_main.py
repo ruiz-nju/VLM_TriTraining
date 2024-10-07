@@ -1,7 +1,8 @@
 import argparse
 import sklearn.utils
 import torch
-
+import random
+from torchvision.transforms import InterpolationMode
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
 from dassl.config import get_cfg_default
 from dassl.engine import build_trainer
@@ -10,6 +11,18 @@ import numpy as np
 import sklearn
 from LAMDA_SSL.Dataset.Vision.CIFAR10 import CIFAR10
 from LAMDA_SSL.Evaluation.Classifier.Accuracy import Accuracy
+from dassl.utils import read_image
+from dassl.data.transforms.transforms import build_transform
+from LAMDA_SSL.Transform.ToTensor import ToTensor
+from LAMDA_SSL.Transform.ToImage import ToImage
+from sklearn.pipeline import Pipeline
+import torchvision.transforms as transforms
+from PIL import Image
+from dassl.data.transforms.transforms import Cutout
+from LAMDA_SSL.Transform.Vision.Normalization import Normalization
+from LAMDA_SSL.Transform.ToTensor import ToTensor
+from LAMDA_SSL.Transform.ToImage import ToImage
+from tqdm import tqdm
 
 # custom
 import datasets.oxford_pets
@@ -28,7 +41,7 @@ import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
 import datasets.cifar10
-
+from LAMDA_SSL.Split.DataSplit import DataSplit
 import trainers.coop
 import trainers.cocoop
 import trainers.tri_training
@@ -36,8 +49,10 @@ import trainers.zsclip
 import trainers.maple
 import trainers.vpt
 from trainers.tri_training import Tri_Training
-
+from LAMDA_SSL.Transform.Vision.Resize import Resize
 from torch.utils.data import DataLoader, TensorDataset
+
+import pdb
 
 
 def extend_cfg(cfg):
@@ -80,14 +95,64 @@ def extend_cfg(cfg):
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
 
-def get_dataset():
-    dataset = CIFAR10(root="/mnt/hdd/zhurui/data", labeled_size=0.1, shuffle=True)
-    labeled_X, labeled_y = dataset.labeled_X, dataset.labeled_y
-    unlabeled_X = dataset.unlabeled_X
-    test_X, test_y = dataset.test_X, dataset.test_y
-    # print("labeled_X shape: ", labeled_X.shape)
-    # print("unlabeled_X shape: ", unlabeled_X.shape)
-    # print("test_X shape: ", test_X.shape)
+def get_dataset(model):
+    train_x_list = []
+    train_y_list = []
+
+    print("Get train dataset")
+    for batch in tqdm(model.train_loader_x):
+        # Parse batch
+        X, y = model.parse_batch_train(batch)
+
+        # Move X and y to CPU
+        X_cpu = X.cpu()
+        y_cpu = y.cpu()
+
+        # Append to list
+        train_x_list.append(X_cpu)
+        train_y_list.append(y_cpu)
+
+    # Concatenate tensors
+    train_x_tensor = torch.cat(train_x_list, dim=0)
+    train_y_tensor = torch.cat(train_y_list, dim=0)
+
+    # Convert to NumPy arrays
+    train_x = train_x_tensor.numpy()
+    train_y = train_y_tensor.numpy()
+
+    # print(train_x.shape)
+    # print(train_y.shape)
+    # pdb.set_trace()
+
+    labeled_X, labeled_y, unlabeled_X, unlabeled_y = DataSplit(
+        X=train_x,
+        y=train_y,
+        size_split=0.1,
+        random_state=1,
+    )
+    # 获取 test
+    test_X_list = []
+    test_y_list = []
+    print("Get test dataset")
+    for batch in tqdm(model.test_loader):
+        # 解析 batch
+        X, y = model.parse_batch_train(batch)
+
+        # 将 X 和 y 从 CUDA 移动到 CPU 并转换为 NumPy 数组
+        X_np = X.cpu()
+        y_np = y.cpu()
+
+        # 将 NumPy 数组添加到列表中
+        test_X_list.append(X_np)
+        test_y_list.append(y_np)
+    test_X_tensor = torch.cat(test_X_list, dim=0)
+    test_y_tensor = torch.cat(test_y_list, dim=0)
+    test_X = test_X_tensor.numpy()
+    test_y = test_y_tensor.numpy()
+    # print(test_X.shape)
+    # print(test_y.shape)
+    # pdb.set_trace()
+
     return labeled_X, labeled_y, unlabeled_X, test_X, test_y
 
 
@@ -96,9 +161,7 @@ if __name__ == "__main__":
         argparse.ArgumentParser()
     )  # 创建一个 ArgumentParser 对象，用来处理命令行输入
     parser.add_argument("--fit_epoch", type=int, help="set the ")
-    args = (
-        parser.parse_args()
-    )  # 解析命令行传入的参数，并将它们存储在一个命名空间对象 args 中
+    args = parser.parse_args()  # 解析命令行传入的参数
     print("----------Build up cfg----------")
     cfg_coop = get_cfg_default()
     cfg_vpt = get_cfg_default()
@@ -128,9 +191,13 @@ if __name__ == "__main__":
     print("----------Build up MaPLe----------")
     maple = build_trainer(cfg_maple)
 
-    # 获取数据集
-    labeled_X, labeled_y, unlabeled_X, test_X, test_y = get_dataset()
-
+    labeled_X, labeled_y, unlabeled_X, test_X, test_y = get_dataset(coop)
+    print(f"labeled_X: {labeled_X.shape}")
+    print(f"labeled_y: {labeled_y.shape}")
+    print(f"unlabeled_X: {unlabeled_X.shape}")
+    print(f"test_X: {test_X.shape}")
+    print(f"test_y: {test_y.shape}")
+    # pdb.set_trace()
     # # 实例化 Tri_Training 并进行训练和测试
     tri_trainer = Tri_Training(coop, vpt, maple)
 
@@ -140,4 +207,4 @@ if __name__ == "__main__":
 
     # 计算准确率
     acc = Accuracy()
-    print(acc.score(y_pred, test_y))
+    print("Accuracy: ", acc.score(y_pred, test_y))

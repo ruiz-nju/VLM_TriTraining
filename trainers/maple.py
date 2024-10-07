@@ -379,23 +379,25 @@ class MaPLe(TrainerX):
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
 
-    def fit(self, X, y, batch_size=32):
+    def fit(self, X, y):
         self.set_model_mode("train")
         X = torch.tensor(X)
-        X = torch.permute(X, (0, 3, 1, 2))
-        X = T.Resize((224, 224))(X)
         y = torch.tensor(y)
 
         # 使用 TensorDataset 将 X 和 y 进行打包
         dataset = TensorDataset(X, y)
         # 使用 DataLoader 创建数据加载器，进行批次处理
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
+            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
+            shuffle=True,
+        )
         prec = self.cfg.TRAINER.MAPLE.PREC
         # 迭代 dataloader 中的每个批次
         for epoch in range(self.max_epoch):
             print(f"Epoch: {epoch + 1}")
-            batch_idx = 0
-            for batch_X, batch_y in dataloader:
+            for batch_idx, (batch_X, batch_y) in enumerate(dataloader):
                 batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
 
                 if prec == "amp":
@@ -411,22 +413,22 @@ class MaPLe(TrainerX):
                     loss = loss.mean()  # 后添加
                     loss.backward()
                     self.optim.step()
-                if (batch_idx + 1) == len(dataloader):
-                    self.update_lr()
                 # 在每个 batch 处理完后，释放显存
                 torch.cuda.empty_cache()
-                batch_idx += 1
                 print(f"batch: {batch_idx}, loss: {loss.item()}")
             print(f"learning rate: {self.get_current_lr()}")
             self.update_lr()
 
-    def predict(self, X, batch_size=100):
+    def predict(self, X):
         self.set_model_mode("eval")
         X = torch.tensor(X)
-        X = torch.permute(X, (0, 3, 2, 1))
-        X = T.Resize((224, 224))(X)
         dataset = TensorDataset(X)  # 只需要 X, 不需要 y
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
+            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
+            shuffle=False,
+        )
         all_outputs = []
         # print("MaPle X:", X.shape)
         with torch.no_grad():

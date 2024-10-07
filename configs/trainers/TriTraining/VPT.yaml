@@ -69,7 +69,7 @@ OPTIM:
   GAMMA: 0.1
   LR: 0.0025
   LR_SCHEDULER: cosine
-  MAX_EPOCH: 3
+  MAX_EPOCH: 10
   MOMENTUM: 0.9
   NAME: sgd
   NEW_LAYERS: ()
