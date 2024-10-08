@@ -55,6 +55,42 @@ from torch.utils.data import DataLoader, TensorDataset
 import pdb
 
 
+def setup_cfg(args):
+    print("----------Build up cfg----------")
+    cfg = {
+        "CoOp": get_cfg_default(),
+        "VPT": get_cfg_default(),
+        "MaPLe": get_cfg_default(),
+    }
+    for key in cfg.keys():
+        extend_cfg(cfg[key])
+        cfg[key].merge_from_file(args.dataset_config_file)
+        cfg[key].merge_from_file(
+            f"/mnt/hdd/zhurui/code/TriTraining/configs/trainers/TriTraining/{key}.yaml"
+        )
+        if args.root:
+            cfg[key].DATASET.ROOT = args.root
+        if args.output_dir:
+            cfg[key].OUTPUT_DIR = args.output_dir
+        if args.resume:
+            cfg[key].RESUME = args.resume
+        if args.seed:
+            cfg[key].SEED = args.seed
+        if args.source_domains:
+            cfg[key].DATASET.SOURCE_DOMAINS = args.source_domains
+        if args.target_domains:
+            cfg[key].DATASET.TARGET_DOMAINS = args.target_domains
+        if args.transforms:
+            cfg[key].INPUT.TRANSFORMS = args.transforms
+        if args.backbone:
+            cfg[key].MODEL.BACKBONE.NAME = args.backbone
+        if args.head:
+            cfg[key].MODEL.HEAD.NAME = args.head
+        cfg[key].merge_from_list(args.opts)
+        cfg[key].freeze()
+    return cfg
+
+
 def extend_cfg(cfg):
     cfg.TRAINER.MODAL = "classification"
     from yacs.config import CfgNode as CN
@@ -120,10 +156,6 @@ def get_dataset(model):
     train_x = train_x_tensor.numpy()
     train_y = train_y_tensor.numpy()
 
-    # print(train_x.shape)
-    # print(train_y.shape)
-    # pdb.set_trace()
-
     labeled_X, labeled_y, unlabeled_X, unlabeled_y = DataSplit(
         X=train_x,
         y=train_y,
@@ -149,55 +181,40 @@ def get_dataset(model):
     test_y_tensor = torch.cat(test_y_list, dim=0)
     test_X = test_X_tensor.numpy()
     test_y = test_y_tensor.numpy()
-    # print(test_X.shape)
-    # print(test_y.shape)
-    # pdb.set_trace()
-
-    return labeled_X, labeled_y, unlabeled_X, test_X, test_y
-
-
-if __name__ == "__main__":
-    parser = (
-        argparse.ArgumentParser()
-    )  # 创建一个 ArgumentParser 对象，用来处理命令行输入
-    parser.add_argument("--fit_epoch", type=int, help="set the ")
-    args = parser.parse_args()  # 解析命令行传入的参数
-    print("----------Build up cfg----------")
-    cfg_coop = get_cfg_default()
-    cfg_vpt = get_cfg_default()
-    cfg_maple = get_cfg_default()
-    extend_cfg(cfg_coop)
-    extend_cfg(cfg_vpt)
-    extend_cfg(cfg_maple)
-    cfg_coop.merge_from_file(
-        "/mnt/hdd/zhurui/code/CoOp/configs/trainers/TriTraining/CoOp.yaml"
-    )
-    cfg_vpt.merge_from_file(
-        "/mnt/hdd/zhurui/code/CoOp/configs/trainers/TriTraining/VPT.yaml"
-    )
-    cfg_maple.merge_from_file(
-        "/mnt/hdd/zhurui/code/CoOp/configs/trainers/TriTraining/MaPLe.yaml"
-    )
-    cfg_coop.OPTIM.MAX_EPOCH = args.fit_epoch
-    cfg_vpt.OPTIM.MAX_EPOCH = args.fit_epoch
-    cfg_maple.OPTIM.MAX_EPOCH = args.fit_epoch
-    cfg_coop.freeze()
-    cfg_vpt.freeze()
-    cfg_maple.freeze()
-    print("----------Build up CoOp----------")
-    coop = build_trainer(cfg_coop)
-    print("----------Build up VPT----------")
-    vpt = build_trainer(cfg_vpt)
-    print("----------Build up MaPLe----------")
-    maple = build_trainer(cfg_maple)
-
-    labeled_X, labeled_y, unlabeled_X, test_X, test_y = get_dataset(coop)
     print(f"labeled_X: {labeled_X.shape}")
     print(f"labeled_y: {labeled_y.shape}")
     print(f"unlabeled_X: {unlabeled_X.shape}")
     print(f"test_X: {test_X.shape}")
     print(f"test_y: {test_y.shape}")
-    # pdb.set_trace()
+    return labeled_X, labeled_y, unlabeled_X, test_X, test_y
+
+
+def main(args):
+    cfg = setup_cfg(args)
+    base_cfg = cfg["CoOp"]
+
+    if base_cfg.SEED >= 0:
+        print("Setting fixed seed: {}".format(base_cfg.SEED))
+        set_random_seed(base_cfg.SEED)
+    setup_logger(base_cfg.OUTPUT_DIR)
+
+    if torch.cuda.is_available() and base_cfg.USE_CUDA:
+        torch.backends.cudnn.benchmark = True
+
+    print("----------Build up CoOp----------")
+    print(f"Config of CoOp:\n{cfg['CoOp']}")
+    coop = build_trainer(cfg["CoOp"])
+
+    print("----------Build up VPT----------")
+    print(f"Config of VPT:\n{cfg['VPT']}")
+    vpt = build_trainer(cfg["VPT"])
+
+    print("----------Build up MaPLe----------")
+    print(f"Config of MaPLe:\n{cfg['MaPLe']}")
+    maple = build_trainer(cfg["MaPLe"])
+
+    labeled_X, labeled_y, unlabeled_X, test_X, test_y = get_dataset(coop)
+
     # # 实例化 Tri_Training 并进行训练和测试
     tri_trainer = Tri_Training(coop, vpt, maple)
 
@@ -208,3 +225,65 @@ if __name__ == "__main__":
     # 计算准确率
     acc = Accuracy()
     print("Accuracy: ", acc.score(y_pred, test_y))
+
+
+if __name__ == "__main__":
+    parser = (
+        argparse.ArgumentParser()
+    )  # 创建一个 ArgumentParser 对象，用来处理命令行输入
+    parser.add_argument("--root", type=str, default="", help="path to dataset")
+    parser.add_argument("--output-dir", type=str, default="", help="output directory")
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default="",
+        help="checkpoint directory (from which the training resumes)",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=-1, help="only positive value enables a fixed seed"
+    )  # 1
+    parser.add_argument(
+        "--source-domains", type=str, nargs="+", help="source domains for DA/DG"
+    )
+    parser.add_argument(
+        "--target-domains", type=str, nargs="+", help="target domains for DA/DG"
+    )
+    parser.add_argument(
+        "--transforms", type=str, nargs="+", help="data augmentation methods"
+    )
+    parser.add_argument(
+        "--config-file", type=str, default="", help="path to config file"
+    )  # configs/trainers/CoOp/vit_b16.yaml
+    parser.add_argument(
+        "--dataset-config-file",
+        type=str,
+        default="",
+        help="path to config file for dataset setup",
+    )
+    parser.add_argument("--trainer", type=str, default="", help="name of trainer")
+    parser.add_argument("--backbone", type=str, default="", help="name of CNN backbone")
+    parser.add_argument("--head", type=str, default="", help="name of head")
+    parser.add_argument("--eval-only", action="store_true", help="evaluation only")
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default="",
+        help="load model from this directory for eval-only mode",
+    )
+    parser.add_argument(
+        "--load-epoch", type=int, help="load model weights at this epoch for evaluation"
+    )
+    parser.add_argument(
+        "--no-train", action="store_true", help="do not call trainer.train()"
+    )
+    parser.add_argument(
+        "opts",
+        default=None,
+        nargs=argparse.REMAINDER,
+        help="modify config options using the command-line",
+    )
+    args = (
+        parser.parse_args()
+    )  # 解析命令行传入的参数，并将它们存储在一个命名空间对象 args 中
+    args = parser.parse_args()  # 解析命令行传入的参数
+    main(args)

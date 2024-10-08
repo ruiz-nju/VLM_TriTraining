@@ -1,6 +1,7 @@
 """
 Modified from https://github.com/KaiyangZhou/deep-person-reid
 """
+
 import os
 import sys
 import json
@@ -84,7 +85,7 @@ def download_url(url, dst):
         url (str): url to download file.
         dst (str): destination path.
     """
-    from six.moves import urllib
+    from six.moves import urllib  # type: ignore
 
     print('* url="{}"'.format(url))
     print('* destination="{}"'.format(dst))
@@ -96,11 +97,11 @@ def download_url(url, dst):
             return
         duration = time.time() - start_time
         progress_size = int(count * block_size)
-        speed = int(progress_size / (1024*duration))
+        speed = int(progress_size / (1024 * duration))
         percent = int(count * block_size * 100 / total_size)
         sys.stdout.write(
-            "\r...%d%%, %d MB, %d KB/s, %d seconds passed" %
-            (percent, progress_size / (1024*1024), speed, duration)
+            "\r...%d%%, %d MB, %d KB/s, %d seconds passed"
+            % (percent, progress_size / (1024 * 1024), speed, duration)
         )
         sys.stdout.flush()
 
