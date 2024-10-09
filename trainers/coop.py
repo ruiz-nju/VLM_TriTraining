@@ -1,5 +1,5 @@
 import os.path as osp
-
+import datetime
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -17,6 +17,7 @@ from dassl.utils import (
     MetricMeter,
     AverageMeter,
 )
+import time
 import pdb
 
 _tokenizer = _Tokenizer()
@@ -300,13 +301,13 @@ class CoOp(TrainerX):
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.model = nn.DataParallel(self.model)
 
-    def forward_backward(self, batch):
-        image, label = self.parse_batch_train(batch)
-
-        # print(type(image))  # <class 'torch.Tensor'>
-        # print(image.shape)  # torch.Size([32, 3, 224, 224])
-        # print(len(label))  # 32
-        # pdb.set_trace()
+    def forward_backward(self, batch, custom_parse=False):
+        if custom_parse:
+            image, label = batch
+            image = image.to(self.device)  # image.to(self.device) 并没有改变原始张量
+            label = label.to(self.device)
+        else:
+            image, label = self.parse_batch_train(batch)
         prec = self.cfg.TRAINER.COOP.PREC
         if prec == "amp":
             with autocast():
@@ -374,45 +375,6 @@ class CoOp(TrainerX):
             )
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
-
-    def fit(self, X, y):
-        self.set_model_mode("train")
-        X = torch.tensor(X)
-        y = torch.tensor(y)
-
-        # 使用 TensorDataset 将 X 和 y 进行打包
-        dataset = TensorDataset(X, y)
-        # 使用 DataLoader 创建数据加载器，进行批次处理
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
-            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
-        )
-        prec = self.cfg.TRAINER.COOP.PREC
-        for epoch in range(self.max_epoch):
-            print(f"Epoch: {epoch + 1}")
-            # 迭代 dataloader 中的每个批次
-            for batch_idx, (batch_X, batch_y) in enumerate(dataloader):
-                batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
-
-                if prec == "amp":
-                    with autocast():
-                        output = self.model(batch_X)
-                        loss = F.cross_entropy(output, batch_y)
-                    self.optim.zero_grad()
-                    self.scaler.scale(loss).backward()
-                    self.scaler.step(self.optim)
-                    self.scaler.update()
-                else:
-                    output = self.model(batch_X)
-                    loss = F.cross_entropy(output, batch_y)
-                    self.model_backward_and_update(loss)
-                # 在每个 batch 处理完后，释放显存
-                torch.cuda.empty_cache()
-                acc = compute_accuracy(output, batch_y)[0].item()
-                print(f"batch: {batch_idx}, loss: {loss.item()}, acc: {acc}")
-            print(f"learning rate: {self.get_current_lr()}")
-            self.update_lr()
 
     def predict(self, X):
         self.set_model_mode("eval")

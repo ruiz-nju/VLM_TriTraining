@@ -1,7 +1,7 @@
 # Deep vision prompting
 DATALOADER:
   TRAIN_X:
-    BATCH_SIZE: 32
+    BATCH_SIZE: 4
   TEST:
     BATCH_SIZE: 100
   NUM_WORKERS: 8
@@ -16,7 +16,7 @@ INPUT:
 OPTIM:
   NAME: "sgd"
   LR: 0.0025
-  MAX_EPOCH: 10
+  MAX_EPOCH: 5
   LR_SCHEDULER: "cosine"
   WARMUP_EPOCH: 1
   WARMUP_TYPE: "constant"

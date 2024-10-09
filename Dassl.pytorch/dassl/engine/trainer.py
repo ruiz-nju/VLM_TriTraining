@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-
+from torch.utils.data import DataLoader, TensorDataset
 from dassl.data import DataManager
 from dassl.optim import build_optimizer, build_lr_scheduler
 from dassl.utils import (
@@ -581,17 +581,21 @@ class TrainerXU(SimpleTrainer):
 class TrainerX(SimpleTrainer):
     """A base trainer using labeled data only."""
 
-    def run_epoch(self):
+    def run_epoch(self, dataloader=None):
         self.set_model_mode("train")
         losses = MetricMeter()
         batch_time = AverageMeter()
         data_time = AverageMeter()
-        self.num_batches = len(self.train_loader_x)
+        if dataloader is None:
+            dataloader = self.train_loader_x
+        else:
+            custom_parse = True
+        self.num_batches = len(dataloader)
 
         end = time.time()
-        for self.batch_idx, batch in enumerate(self.train_loader_x):
+        for self.batch_idx, batch in enumerate(dataloader):
             data_time.update(time.time() - end)
-            loss_summary = self.forward_backward(batch)
+            loss_summary = self.forward_backward(batch, custom_parse)
             batch_time.update(time.time() - end)
             losses.update(loss_summary)
 
@@ -631,3 +635,33 @@ class TrainerX(SimpleTrainer):
         domain = domain.to(self.device)
 
         return input, label, domain
+
+    # 自定义数据的 fit
+    def fit(self, X, y):
+        # 因为要多次调用 fit，所以需要手动设置 start_epoch 为 0
+        self.start_epoch = 0
+
+        X = torch.tensor(X)
+        y = torch.tensor(y)
+        # 使用 TensorDataset 将 X 和 y 进行打包
+        dataset = TensorDataset(X, y)
+        # 使用 DataLoader 创建数据加载器，进行批次处理
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
+            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
+        )
+        self.before_train()
+        for self.epoch in range(self.start_epoch, self.max_epoch):
+            self.before_epoch()
+            self.run_epoch(dataloader)
+            # self.after_epoch()
+        # self.after_train()
+        print("Finish training")
+        # Show elapsed time
+        elapsed = round(time.time() - self.time_start)
+        elapsed = str(datetime.timedelta(seconds=elapsed))
+        print(f"Elapsed: {elapsed}")
+
+        # Close writer
+        self.close_writer()

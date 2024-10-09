@@ -17,6 +17,8 @@ from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 from torch.utils.data import DataLoader, TensorDataset
 import torchvision.transforms as T
 from tqdm import tqdm
+import time
+import datetime
 
 _tokenizer = _Tokenizer()
 
@@ -306,8 +308,13 @@ class MaPLe(TrainerX):
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.model = nn.DataParallel(self.model)
 
-    def forward_backward(self, batch):
-        image, label = self.parse_batch_train(batch)
+    def forward_backward(self, batch, custom_parse=False):
+        if custom_parse:
+            image, label = batch
+            image = image.to(self.device)
+            label = label.to(self.device)
+        else:
+            image, label = self.parse_batch_train(batch)
 
         model = self.model
         optim = self.optim
@@ -378,46 +385,6 @@ class MaPLe(TrainerX):
             )
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
-
-    def fit(self, X, y):
-        self.set_model_mode("train")
-        X = torch.tensor(X)
-        y = torch.tensor(y)
-
-        # 使用 TensorDataset 将 X 和 y 进行打包
-        dataset = TensorDataset(X, y)
-        # 使用 DataLoader 创建数据加载器，进行批次处理
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
-            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
-            shuffle=True,
-        )
-        prec = self.cfg.TRAINER.MAPLE.PREC
-        # 迭代 dataloader 中的每个批次
-        for epoch in range(self.max_epoch):
-            print(f"Epoch: {epoch + 1}")
-            for batch_idx, (batch_X, batch_y) in enumerate(dataloader):
-                batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
-
-                if prec == "amp":
-                    with autocast():
-                        loss = self.model(batch_X, batch_y)
-                    self.optim.zero_grad()
-                    self.scaler.scale(loss).backward()
-                    self.scaler.step(self.optim)
-                    self.scaler.update()
-                else:
-                    loss = self.model(batch_X, batch_y)
-                    self.optim.zero_grad()
-                    loss = loss.mean()  # 后添加
-                    loss.backward()
-                    self.optim.step()
-                # 在每个 batch 处理完后，释放显存
-                torch.cuda.empty_cache()
-                print(f"batch: {batch_idx}, loss: {loss.item()}")
-            print(f"learning rate: {self.get_current_lr()}")
-            self.update_lr()
 
     def predict(self, X):
         self.set_model_mode("eval")

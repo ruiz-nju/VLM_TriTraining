@@ -6,7 +6,7 @@ SHOTS=$2
 SEED=$3
 
 DIR=output/${TRAINER}/classification/${DATASET}/shots_${SHOTS}
-CUDA_VISIBLE_DEVICES=0 python tritraining_main.py \
+CUDA_VISIBLE_DEVICES=1 python tritraining_main.py \
     --root ${DATA} \
     --seed ${SEED} \
     --dataset-config-file configs/datasets/${DATASET}.yaml \

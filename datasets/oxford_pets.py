@@ -154,7 +154,7 @@ class OxfordPets(DatasetBase):
         if subsample == "all":
             return args
 
-        dataset = args[0]
+        dataset = args[0]  # train
         labels = set()
         for item in dataset:
             labels.add(item.label)
