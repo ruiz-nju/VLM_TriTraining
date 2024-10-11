@@ -319,6 +319,8 @@ class CoOp(TrainerX):
             self.scaler.update()
         else:
             output = self.model(image)
+            print(output.shape)
+            pdb.set_trace()
             loss = F.cross_entropy(output, label)
             self.model_backward_and_update(loss)
 

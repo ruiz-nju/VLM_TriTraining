@@ -588,6 +588,7 @@ class TrainerX(SimpleTrainer):
         data_time = AverageMeter()
         if dataloader is None:
             dataloader = self.train_loader_x
+            custom_parse = False
         else:
             custom_parse = True
         self.num_batches = len(dataloader)

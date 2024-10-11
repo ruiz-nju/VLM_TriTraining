@@ -8,13 +8,13 @@ class Tri_Training:
         # 初始化函数，接受三个基本分类器
         self.estimators = [base_estimator_1, base_estimator_2, base_estimator_3]
 
-    def measure_error(self, X, y, j, k):
+    def measure_error(self, datums, j, k):
         # 计算模型 j 和模型 k 之间的错误率
         print(f"Measuring error between model {j} and model {k}")
-
+        y = [datum.label for datum in datums]
         # 获取模型 j 和 k 的预测结果
-        j_pred = self.estimators[j].predict(X)
-        k_pred = self.estimators[k].predict(X)
+        j_pred = self.estimators[j].predict(datums)
+        k_pred = self.estimators[k].predict(datums)
 
         # 打印模型 j 和模型 k 的前 10 个预测结果，方便调试
         print(f"Model {j} predictions (first 10): {j_pred[:10]}")
@@ -45,12 +45,16 @@ class Tri_Training:
 
         return error_rate
 
-    def fit(self, X, y, unlabeled_X):
+    def resample(self, datums):
+        # TODO
+        pass
+
+    def fit(self, train_x, train_u):
         # 初始化每个分类器的训练，使用带放回抽样生成新的训练集
         for i in range(3):
-            sub_X, sub_y = sklearn.utils.resample(X, y)
+            sub_train_x = self.resample(train_x)
             print("fitting estimator:", i)
-            self.estimators[i].fit(sub_X, sub_y)
+            self.estimators[i].fit(sub_train_x)
 
         # e_prime: 用于存储每个模型的初始错误率，初始化为 0.5
         e_prime = [0.5] * 3
@@ -61,7 +65,7 @@ class Tri_Training:
         # update: 标记是否需要更新模型
         update = [False] * 3
         # lb_X 和 lb_y: 用于存储标记样本的特征和标签
-        lb_X, lb_y = [[]] * 3, [[]] * 3
+        lb_train_u, lb_y = [[]] * 3, [[]] * 3
         improve = True
         iter = 0
 
@@ -76,20 +80,20 @@ class Tri_Training:
                 j, k = np.delete(np.array([0, 1, 2]), i)
                 update[i] = False
 
-                # 计算模型 j 和 k 对模型 i 的错误率
-                e[i] = self.measure_error(X, y, j, k)
+                # 计算模型 j 和 k 的相对错误率
+                e[i] = self.measure_error(train_x, j, k)
 
-                # 如果模型 i 的错误率小于其先前的错误率，尝试用未标记数据更新它
+                # 如果新的错误率小于先前的错误率，即 j 和 k 变得更好了，尝试用未标记数据更新 i
                 if e[i] < e_prime[i]:
                     print("predicting:", j)
                     # 使用未标记数据让模型 j 进行预测
-                    ulb_y_j = self.estimators[j].predict(unlabeled_X)
+                    ulb_y_j = self.estimators[j].predict(train_x)
                     print("predicting:", k)
                     # 使用未标记数据让模型 k 进行预测
-                    ulb_y_k = self.estimators[k].predict(unlabeled_X)
+                    ulb_y_k = self.estimators[k].predict(train_u)
 
                     # 获取 j 和 k 预测一致的未标记样本，并将它们作为模型 i 的新标记样本
-                    lb_X[i] = unlabeled_X[ulb_y_j == ulb_y_k]
+                    lb_train_u[i] = train_u[ulb_y_j == ulb_y_k]
                     lb_y[i] = ulb_y_j[ulb_y_j == ulb_y_k]
 
                     # 更新 l_prime 为所需标记样本的数量
@@ -106,7 +110,10 @@ class Tri_Training:
                             lb_index = np.random.choice(
                                 len(lb_y[i]), int(e_prime[i] * l_prime[i] / e[i] - 1)
                             )
-                            lb_X[i], lb_y[i] = lb_X[i][lb_index], lb_y[i][lb_index]
+                            lb_train_u[i], lb_y[i] = (
+                                lb_train_u[i][lb_index],
+                                lb_y[i][lb_index],
+                            )
                             update[i] = True
 
             # 更新每个模型（如果需要）
@@ -114,9 +121,7 @@ class Tri_Training:
                 if update[i]:
                     print("updating estimator:", i)
                     # 将标记数据集与新标记的未标记样本合并，并重新训练模型
-                    self.estimators[i].fit(
-                        np.append(X, lb_X[i], axis=0), np.append(y, lb_y[i], axis=0)
-                    )
+                    self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i])
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
@@ -127,11 +132,11 @@ class Tri_Training:
 
         return
 
-    def predict(self, X):
+    def predict(self, datums):
         # 预测新数据集 X，返回预测结果
-        print(f"predicting {len(X)} samples")
+        print(f"predicting {len(datums)} samples")
         # 对三个模型分别进行预测，结果转换为 NumPy 数组
-        output = [self.estimators[i].predict(X).cpu().numpy() for i in range(3)]
+        output = [self.estimators[i].predict(datums).cpu().numpy() for i in range(3)]
         pred = np.asarray(output)
 
         # 如果模型 1 和 2 的预测一致，则以它们的预测结果为准

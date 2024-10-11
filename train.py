@@ -129,6 +129,9 @@ def extend_cfg(cfg):
     # 默认的采样设置为 all，可以根据需要进行调整
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
+    # 默认的训练策略为 supervised，可以根据需要进行调整
+    cfg.TRAINER.STRATEGY = "supervised"  # supervised, semi-supervised
+
 
 def setup_cfg(args):
     cfg = get_cfg_default()

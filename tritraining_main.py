@@ -130,63 +130,15 @@ def extend_cfg(cfg):
     # 默认的采样设置为 all，可以根据需要进行调整
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
+    # 训练策略可以根据需要进行调整
+    cfg.TRAINER.STRATEGY = "semi-supervised"  # supervised, semi-supervised
+
+    # 无标注数据的 shots
+    cfg.DATASET.NUM_SHOT_UNLABELED = 16
+
 
 def get_dataset(model):
-    train_x_list = []
-    train_y_list = []
-
-    print("Get train dataset")
-    for batch in tqdm(model.train_loader_x):
-        # Parse batch
-        X, y = model.parse_batch_train(batch)
-
-        # Move X and y to CPU
-        X_cpu = X.cpu()
-        y_cpu = y.cpu()
-
-        # Append to list
-        train_x_list.append(X_cpu)
-        train_y_list.append(y_cpu)
-
-    # Concatenate tensors
-    train_x_tensor = torch.cat(train_x_list, dim=0)
-    train_y_tensor = torch.cat(train_y_list, dim=0)
-
-    # Convert to NumPy arrays
-    train_x = train_x_tensor.numpy()
-    train_y = train_y_tensor.numpy()
-
-    labeled_X, labeled_y, unlabeled_X, unlabeled_y = DataSplit(
-        X=train_x,
-        y=train_y,
-        size_split=0.1,
-        random_state=1,
-    )
-    # 获取 test
-    test_X_list = []
-    test_y_list = []
-    print("Get test dataset")
-    for batch in tqdm(model.test_loader):
-        # 解析 batch
-        X, y = model.parse_batch_train(batch)
-
-        # 将 X 和 y 从 CUDA 移动到 CPU 并转换为 NumPy 数组
-        X_np = X.cpu()
-        y_np = y.cpu()
-
-        # 将 NumPy 数组添加到列表中
-        test_X_list.append(X_np)
-        test_y_list.append(y_np)
-    test_X_tensor = torch.cat(test_X_list, dim=0)
-    test_y_tensor = torch.cat(test_y_list, dim=0)
-    test_X = test_X_tensor.numpy()
-    test_y = test_y_tensor.numpy()
-    print(f"labeled_X: {labeled_X.shape}")
-    print(f"labeled_y: {labeled_y.shape}")
-    print(f"unlabeled_X: {unlabeled_X.shape}")
-    print(f"test_X: {test_X.shape}")
-    print(f"test_y: {test_y.shape}")
-    return labeled_X, labeled_y, unlabeled_X, test_X, test_y
+    return model.dm.train_x, model.dm.train_u, model.dm.val, model.dm.test
 
 
 def main(args):
@@ -213,18 +165,18 @@ def main(args):
     print(f"Config of MaPLe:\n{cfg['MaPLe']}")
     maple = build_trainer(cfg["MaPLe"])
 
-    labeled_X, labeled_y, unlabeled_X, test_X, test_y = get_dataset(coop)
+    train_x, train_u, val, test = get_dataset(coop)
 
-    # # 实例化 Tri_Training 并进行训练和测试
-    tri_trainer = Tri_Training(coop, vpt, maple)
+    # # # 实例化 Tri_Training 并进行训练和测试
+    # tri_trainer = Tri_Training(coop, vpt, maple)
 
-    tri_trainer.fit(labeled_X, labeled_y, unlabeled_X)
+    # tri_trainer.fit(train_x, train_u)
 
-    y_pred = tri_trainer.predict(test_X)
+    # y_pred = tri_trainer.predict(test)
 
-    # 计算准确率
-    acc = Accuracy()
-    print("Accuracy: ", acc.score(y_pred, test_y))
+    # # 计算准确率
+    # acc = Accuracy()
+    # print("Accuracy: ", acc.score(y_pred, test_y))
 
 
 if __name__ == "__main__":
