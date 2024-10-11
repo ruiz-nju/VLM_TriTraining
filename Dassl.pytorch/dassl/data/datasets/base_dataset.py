@@ -28,6 +28,10 @@ class Datum:
         self._domain = domain
         self._classname = classname
 
+    # semi-supervised 设置下，用来打伪标签
+    def bound_pseudo_label(self, pseudo_label):
+        self._label = pseudo_label
+
     @property
     def impath(self):
         return self._impath
@@ -164,9 +168,7 @@ class DatasetBase:
 
         print("File extracted to {}".format(osp.dirname(dst)))
 
-    def generate_fewshot_dataset(
-        self, *data_sources, num_shots=-1, repeat=False
-    ):
+    def generate_fewshot_dataset(self, *data_sources, num_shots=-1, repeat=False):
         """Generate a few-shot dataset (typically for the training set).
 
         This function is useful when one wants to evaluate a model

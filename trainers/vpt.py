@@ -17,6 +17,8 @@ from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 from torch.utils.data import DataLoader, TensorDataset
 import torchvision.transforms as T
 from tqdm import tqdm
+from dassl.data.transforms.transforms import build_transform
+from dassl.data.data_manager import build_data_loader
 
 _tokenizer = _Tokenizer()
 
@@ -260,15 +262,17 @@ class VPT(TrainerX):
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
 
-    def predict(self, X):
+    def predict(self, datums):
         self.set_model_mode("eval")
-        X = torch.tensor(X)
-        dataset = TensorDataset(X)  # 只需要 X, 不需要 y
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
-            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
-            shuffle=False,
+        cfg = self.cfg
+        tfm = build_transform(cfg, is_train=False)
+        dataloader = build_data_loader(
+            cfg,
+            sampler_type=cfg.DATALOADER.TEST.SAMPLER,
+            data_source=datums,
+            batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
+            tfm=tfm,
+            is_train=False,
         )
         all_outputs = []
         # print("VPT X:", X.shape)

@@ -19,6 +19,8 @@ from dassl.utils import (
 )
 import time
 import pdb
+from dassl.data.transforms.transforms import build_transform
+from dassl.data.data_manager import build_data_loader
 
 _tokenizer = _Tokenizer()
 
@@ -301,13 +303,8 @@ class CoOp(TrainerX):
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.model = nn.DataParallel(self.model)
 
-    def forward_backward(self, batch, custom_parse=False):
-        if custom_parse:
-            image, label = batch
-            image = image.to(self.device)  # image.to(self.device) 并没有改变原始张量
-            label = label.to(self.device)
-        else:
-            image, label = self.parse_batch_train(batch)
+    def forward_backward(self, batch):
+        image, label = self.parse_batch_train(batch)
         prec = self.cfg.TRAINER.COOP.PREC
         if prec == "amp":
             with autocast():
@@ -378,21 +375,20 @@ class CoOp(TrainerX):
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
 
-    def predict(self, X):
+    def predict(self, datums):
         self.set_model_mode("eval")
-        X = torch.tensor(X)
-
-        dataset = TensorDataset(X)  # 只需要 X, 不需要 y
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
-            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
-            shuffle=False,
+        cfg = self.cfg
+        tfm = build_transform(cfg, is_train=False)
+        dataloader = build_data_loader(
+            cfg,
+            sampler_type=cfg.DATALOADER.TEST.SAMPLER,
+            data_source=datums,
+            batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
+            tfm=tfm,
+            is_train=False,
         )
-
         all_outputs = []
 
-        # print("CoOp X:", X.shape)
         with torch.no_grad():
             for batch_X in tqdm(dataloader):
                 batch_X = batch_X[0].to(self.device)  # 从 dataloader 中取出 batch_X

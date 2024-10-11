@@ -23,6 +23,9 @@ from dassl.utils import (
 )
 from dassl.modeling import build_head, build_backbone
 from dassl.evaluation import build_evaluator
+from dassl.data.transforms.transforms import build_transform
+from dassl.data.data_manager import build_data_loader
+import copy
 
 
 class SimpleNet(nn.Module):
@@ -581,22 +584,18 @@ class TrainerXU(SimpleTrainer):
 class TrainerX(SimpleTrainer):
     """A base trainer using labeled data only."""
 
-    def run_epoch(self, dataloader=None):
+    def run_epoch(self):
         self.set_model_mode("train")
         losses = MetricMeter()
         batch_time = AverageMeter()
         data_time = AverageMeter()
-        if dataloader is None:
-            dataloader = self.train_loader_x
-            custom_parse = False
-        else:
-            custom_parse = True
+        dataloader = self.train_loader_x
         self.num_batches = len(dataloader)
 
         end = time.time()
         for self.batch_idx, batch in enumerate(dataloader):
             data_time.update(time.time() - end)
-            loss_summary = self.forward_backward(batch, custom_parse)
+            loss_summary = self.forward_backward(batch)
             batch_time.update(time.time() - end)
             losses.update(loss_summary)
 
@@ -638,24 +637,23 @@ class TrainerX(SimpleTrainer):
         return input, label, domain
 
     # 自定义数据的 fit
-    def fit(self, labeled_datums, unlabeld_datums, pseudo_labels):
+    def fit(self, labeled_datums, unlabeled_datums=None, pseudo_labels=None):
         # 因为要多次调用 fit，所以需要手动设置 start_epoch 为 0
         self.start_epoch = 0
+        train_dataset = labeled_datums
+        if unlabeled_datums is not None:
+            # 打伪标签
+            unlabeled_copy = copy.deepcopy(unlabeled_datums)
+            # 为深拷贝的数据打上伪标签
+            for datum, pseudo_label in zip(unlabeled_copy, pseudo_labels):
+                datum.bound_pseudo_label(pseudo_label)
 
-        X = torch.tensor(X)
-        y = torch.tensor(y)
-        # 使用 TensorDataset 将 X 和 y 进行打包
-        dataset = TensorDataset(X, y)
-        # 使用 DataLoader 创建数据加载器，进行批次处理
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
-            num_workers=self.cfg.DATALOADER.NUM_WORKERS,
-        )
+            train_dataset += unlabeled_copy
+
         self.before_train()
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()
-            self.run_epoch(dataloader)
+            self.custom_run_epoch(train_dataset)
             # self.after_epoch()
         # self.after_train()
         print("Finish training")
@@ -666,3 +664,55 @@ class TrainerX(SimpleTrainer):
 
         # Close writer
         self.close_writer()
+
+    def custom_run_epoch(self, train_dataset):
+        self.set_model_mode("train")
+        losses = MetricMeter()
+        batch_time = AverageMeter()
+        data_time = AverageMeter()
+        cfg = self.cfg
+        tfm = build_transform(cfg, is_train=True)
+        dataloader = build_data_loader(
+            cfg,
+            sampler_type=cfg.DATALOADER.TRAIN_X.SAMPLER,
+            data_source=train_dataset,
+            batch_size=cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
+            n_domain=cfg.DATALOADER.TRAIN_X.N_DOMAIN,
+            n_ins=cfg.DATALOADER.TRAIN_X.N_INS,
+            tfm=tfm,
+            is_train=True,
+        )
+        self.num_batches = len(dataloader)
+
+        end = time.time()
+        for self.batch_idx, batch in enumerate(dataloader):
+            data_time.update(time.time() - end)
+            loss_summary = self.forward_backward(batch)
+            batch_time.update(time.time() - end)
+            losses.update(loss_summary)
+
+            meet_freq = (self.batch_idx + 1) % self.cfg.TRAIN.PRINT_FREQ == 0
+            only_few_batches = self.num_batches < self.cfg.TRAIN.PRINT_FREQ
+            if meet_freq or only_few_batches:
+                nb_remain = 0
+                nb_remain += self.num_batches - self.batch_idx - 1
+                nb_remain += (self.max_epoch - self.epoch - 1) * self.num_batches
+                eta_seconds = batch_time.avg * nb_remain
+                eta = str(datetime.timedelta(seconds=int(eta_seconds)))
+
+                info = []
+                info += [f"epoch [{self.epoch + 1}/{self.max_epoch}]"]
+                info += [f"batch [{self.batch_idx + 1}/{self.num_batches}]"]
+                info += [f"time {batch_time.val:.3f} ({batch_time.avg:.3f})"]
+                info += [f"data {data_time.val:.3f} ({data_time.avg:.3f})"]
+                info += [f"{losses}"]
+                info += [f"lr {self.get_current_lr():.4e}"]
+                info += [f"eta {eta}"]
+                print(" ".join(info))
+
+            n_iter = self.epoch * self.num_batches + self.batch_idx
+            for name, meter in losses.meters.items():
+                self.write_scalar("train/" + name, meter.avg, n_iter)
+            self.write_scalar("train/lr", self.get_current_lr(), n_iter)
+
+            end = time.time()

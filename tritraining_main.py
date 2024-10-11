@@ -171,13 +171,16 @@ def main(args):
     maple = build_trainer(cfg["MaPLe"])
 
     train_x, train_u, val, test = get_dataset(coop)
+    test_y = [datum.label for datum in test]
+    # print(len(test_y))
+    # pdb.set_trace()
 
     # # # 实例化 Tri_Training 并进行训练和测试
     tri_trainer = Tri_Training(coop, vpt, maple)
 
     tri_trainer.fit(train_x, train_u)
 
-    # y_pred = tri_trainer.predict(test)
+    y_pred = tri_trainer.predict(test)
 
     # # 计算准确率
     # acc = Accuracy()
