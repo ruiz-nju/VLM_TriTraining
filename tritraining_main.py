@@ -138,7 +138,12 @@ def extend_cfg(cfg):
 
 
 def get_dataset(model):
-    return model.dm.train_x, model.dm.train_u, model.dm.val, model.dm.test
+    return (
+        model.dm.dataset.train_x,
+        model.dm.dataset.train_u,
+        model.dm.dataset.val,
+        model.dm.dataset.test,
+    )
 
 
 def main(args):
@@ -168,9 +173,9 @@ def main(args):
     train_x, train_u, val, test = get_dataset(coop)
 
     # # # 实例化 Tri_Training 并进行训练和测试
-    # tri_trainer = Tri_Training(coop, vpt, maple)
+    tri_trainer = Tri_Training(coop, vpt, maple)
 
-    # tri_trainer.fit(train_x, train_u)
+    tri_trainer.fit(train_x, train_u)
 
     # y_pred = tri_trainer.predict(test)
 

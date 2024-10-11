@@ -14,5 +14,6 @@ CUDA_VISIBLE_DEVICES=1 python tritraining_main.py \
     --dataset-config-file configs/datasets/${DATASET}.yaml \
     --output-dir ${DIR} \
     DATASET.NUM_SHOTS ${SHOTS} \
+    DATASET.NUM_SHOT_UNLABELED ${SHOTS_UNLABELED} \
     DATASET.SUBSAMPLE_CLASSES base \
     TRAINER.MODAL  base2novel

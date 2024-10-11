@@ -638,7 +638,7 @@ class TrainerX(SimpleTrainer):
         return input, label, domain
 
     # 自定义数据的 fit
-    def fit(self, X, y):
+    def fit(self, labeled_datums, unlabeld_datums, pseudo_labels):
         # 因为要多次调用 fit，所以需要手动设置 start_epoch 为 0
         self.start_epoch = 0
 

@@ -50,6 +50,10 @@ class Tri_Training:
         pass
 
     def fit(self, train_x, train_u):
+        # print(len(train_x), len(train_u)) # 800 800
+        # print(train_x[0]) # <dassl.data.datasets.base_dataset.Datum object at 0x75ecd4b667c0>
+        # print(train_u[0]) # <dassl.data.datasets.base_dataset.Datum object at 0x75ecd4cb35e0>
+
         # 初始化每个分类器的训练，使用带放回抽样生成新的训练集
         for i in range(3):
             sub_train_x = self.resample(train_x)
