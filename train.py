@@ -184,21 +184,7 @@ def main(args):
         return
 
     if not args.no_train:
-
         trainer.train()
-
-        # for trainer.batch_idx, batch in enumerate(trainer.train_loader_x):
-        #     images, labels = trainer.parse_batch_train(batch)
-        #     pred = trainer.predict(images)
-        #     print(pred)
-        #     print(labels)
-        #     print(pred == labels)
-        #     return
-
-        # for trainer.batch_idx, batch in enumerate(trainer.train_loader_x):
-        #     print(f"batch_idx: {trainer.batch_idx}")
-        #     images, labels = trainer.parse_batch_train(batch)
-        #     trainer.fit(images, labels)
 
 
 if __name__ == "__main__":

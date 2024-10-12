@@ -1,6 +1,7 @@
 """
 Modified from https://github.com/KaiyangZhou/deep-person-reid
 """
+
 import pickle
 import shutil
 import os.path as osp
@@ -29,7 +30,8 @@ def save_checkpoint(
     save_dir,
     is_best=False,
     remove_module_from_keys=True,
-    model_name=""
+    model_name="",
+    with_epoch=True,
 ):
     r"""Save checkpoint.
 
@@ -55,9 +57,13 @@ def save_checkpoint(
         state["state_dict"] = new_state_dict
 
     # save model
-    epoch = state["epoch"]
-    if not model_name:
-        model_name = "model.pth.tar-" + str(epoch)
+    if with_epoch:
+        epoch = state["epoch"]
+        if not model_name:
+            model_name = "model.pth.tar-" + str(epoch)
+    else:
+        if not model_name:
+            model_name = "model.pth.tar"
     fpath = osp.join(save_dir, model_name)
     torch.save(state, fpath)
     print(f"Checkpoint saved to {fpath}")
@@ -104,9 +110,7 @@ def load_checkpoint(fpath):
     except UnicodeDecodeError:
         pickle.load = partial(pickle.load, encoding="latin1")
         pickle.Unpickler = partial(pickle.Unpickler, encoding="latin1")
-        checkpoint = torch.load(
-            fpath, pickle_module=pickle, map_location=map_location
-        )
+        checkpoint = torch.load(fpath, pickle_module=pickle, map_location=map_location)
 
     except Exception:
         print('Unable to load checkpoint from "{}"'.format(fpath))
@@ -174,10 +178,10 @@ def adjust_learning_rate(
     if linear_decay:
         # linearly decay learning rate from base_lr to final_lr
         frac_done = epoch / max_epoch
-        lr = frac_done*final_lr + (1.0-frac_done) * base_lr
+        lr = frac_done * final_lr + (1.0 - frac_done) * base_lr
     else:
         # decay learning rate by gamma for every stepsize
-        lr = base_lr * (gamma**(epoch // stepsize))
+        lr = base_lr * (gamma ** (epoch // stepsize))
 
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
@@ -303,15 +307,11 @@ def load_pretrained_weights(model, weight_path):
     model.load_state_dict(model_dict)
 
     if len(matched_layers) == 0:
-        warnings.warn(
-            f"Cannot load {weight_path} (check the key names manually)"
-        )
+        warnings.warn(f"Cannot load {weight_path} (check the key names manually)")
     else:
         print(f"Successfully loaded pretrained weights from {weight_path}")
         if len(discarded_layers) > 0:
-            print(
-                f"Layers discarded due to unmatched keys or size: {discarded_layers}"
-            )
+            print(f"Layers discarded due to unmatched keys or size: {discarded_layers}")
 
 
 def init_network_weights(model, init_type="normal", gain=0.02):

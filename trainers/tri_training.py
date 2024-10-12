@@ -1,6 +1,8 @@
 import numpy as np
 import sklearn
 import pdb
+from dassl.utils import save_checkpoint
+import os.path as osp
 
 
 class Tri_Training:
@@ -135,7 +137,30 @@ class Tri_Training:
                 improve = False
 
         # 保存三个模型
+        for estimator in self.estimators:
+            names = estimator.get_model_names()
 
+            for name in names:
+                model_dict = estimator._models[name].state_dict()
+
+                optim_dict = None
+                if estimator._optims[name] is not None:
+                    optim_dict = estimator._optims[name].state_dict()
+
+                sched_dict = None
+                if estimator._scheds[name] is not None:
+                    sched_dict = estimator._scheds[name].state_dict()
+
+                save_checkpoint(
+                    {
+                        "state_dict": model_dict,
+                        "optimizer": optim_dict,
+                        "scheduler": sched_dict,
+                    },
+                    osp.join(estimator.output_dir, estimator.cfg.TRAINER.NAME, name),
+                    model_name="final_model.pth.tar",
+                    with_epoch=False,
+                )
         return
 
     def predict(self, datums):

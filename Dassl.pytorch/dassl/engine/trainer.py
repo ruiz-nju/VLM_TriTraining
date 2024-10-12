@@ -124,6 +124,7 @@ class TrainerBase:
     ):
         names = self.get_model_names()
 
+        # 对于 CoOp 来说，这里的 names 是 ['prompt_learner']
         for name in names:
             model_dict = self._models[name].state_dict()
 
