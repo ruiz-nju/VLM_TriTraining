@@ -26,6 +26,7 @@ from dassl.evaluation import build_evaluator
 from dassl.data.transforms.transforms import build_transform
 from dassl.data.data_manager import build_data_loader
 import copy
+import pdb
 
 
 class SimpleNet(nn.Module):
@@ -636,24 +637,33 @@ class TrainerX(SimpleTrainer):
 
         return input, label, domain
 
+    # 下面全是为 TriTraining 自定义的函数
     # 自定义数据的 fit
     def fit(self, labeled_datums, unlabeled_datums=None, pseudo_labels=None):
         # 因为要多次调用 fit，所以需要手动设置 start_epoch 为 0
         self.start_epoch = 0
         train_dataset = labeled_datums
+
         if unlabeled_datums is not None:
-            # 打伪标签
-            unlabeled_copy = copy.deepcopy(unlabeled_datums)
-            # 为深拷贝的数据打上伪标签
-            for datum, pseudo_label in zip(unlabeled_copy, pseudo_labels):
-                datum.bound_pseudo_label(pseudo_label)
+            for datum, pseudo_label in zip(unlabeled_datums, pseudo_labels):
+                datum.bound_pseudo_label(pseudo_label.item())
 
-            train_dataset += unlabeled_copy
-
+            train_dataset += unlabeled_datums
         self.before_train()
+        cfg = self.cfg
+        dataloader = build_data_loader(
+            cfg,
+            sampler_type=cfg.DATALOADER.TRAIN_X.SAMPLER,
+            data_source=train_dataset,
+            batch_size=cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
+            n_domain=cfg.DATALOADER.TRAIN_X.N_DOMAIN,
+            n_ins=cfg.DATALOADER.TRAIN_X.N_INS,
+            tfm=self.dm.tfm_train,
+            is_train=True,
+        )
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()
-            self.custom_run_epoch(train_dataset)
+            self.custom_run_epoch(dataloader)
             # self.after_epoch()
         # self.after_train()
         print("Finish training")
@@ -665,23 +675,11 @@ class TrainerX(SimpleTrainer):
         # Close writer
         self.close_writer()
 
-    def custom_run_epoch(self, train_dataset):
+    def custom_run_epoch(self, dataloader):
         self.set_model_mode("train")
         losses = MetricMeter()
         batch_time = AverageMeter()
         data_time = AverageMeter()
-        cfg = self.cfg
-        tfm = build_transform(cfg, is_train=True)
-        dataloader = build_data_loader(
-            cfg,
-            sampler_type=cfg.DATALOADER.TRAIN_X.SAMPLER,
-            data_source=train_dataset,
-            batch_size=cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
-            n_domain=cfg.DATALOADER.TRAIN_X.N_DOMAIN,
-            n_ins=cfg.DATALOADER.TRAIN_X.N_INS,
-            tfm=tfm,
-            is_train=True,
-        )
         self.num_batches = len(dataloader)
 
         end = time.time()
@@ -716,3 +714,28 @@ class TrainerX(SimpleTrainer):
             self.write_scalar("train/lr", self.get_current_lr(), n_iter)
 
             end = time.time()
+
+    def predict(self, datums):
+        self.set_model_mode("eval")
+        cfg = self.cfg
+        dataloader = build_data_loader(
+            cfg,
+            sampler_type=cfg.DATALOADER.TEST.SAMPLER,
+            data_source=datums,
+            batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
+            tfm=self.dm.tfm_test,
+            is_train=False,
+        )
+        all_outputs = []
+        # print("VPT X:", X.shape)
+        with torch.no_grad():
+            for batch_X in tqdm(dataloader):
+                # batch_X = batch_X[0].to(self.device)
+                batch_X = batch_X["img"].to(self.device)
+                output = self.model(batch_X)
+                output = output.max(1)[1]
+                all_outputs.append(output.cpu())
+
+        # 将所有 batch 的预测结果拼接成一个完整的 tensor
+        all_outputs = torch.cat(all_outputs, dim=0)
+        return all_outputs

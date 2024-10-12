@@ -387,29 +387,3 @@ class MaPLe(TrainerX):
             )
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
-
-    def predict(self, datums):
-        self.set_model_mode("eval")
-        cfg = self.cfg
-        tfm = build_transform(cfg, is_train=False)
-        dataloader = build_data_loader(
-            cfg,
-            sampler_type=cfg.DATALOADER.TEST.SAMPLER,
-            data_source=datums,
-            batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
-            tfm=tfm,
-            is_train=False,
-        )
-        all_outputs = []
-        # print("MaPle X:", X.shape)
-        with torch.no_grad():
-            for batch_X in tqdm(dataloader):
-                batch_X = batch_X[0].to(self.device)
-                output = self.model(batch_X)
-                output = output.max(1)[1]
-                all_outputs.append(output.cpu())
-
-            # print("MaPLe all_output:", len(all_outputs))
-        # 将所有 batch 的预测结果拼接成一个完整的 tensor
-        all_outputs = torch.cat(all_outputs, dim=0)
-        return all_outputs

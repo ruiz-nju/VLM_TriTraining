@@ -30,6 +30,7 @@ class DescribableTextures(DatasetBase):
             OxfordPets.save_split(train, val, test, self.split_path, self.image_dir)
 
         num_shots = cfg.DATASET.NUM_SHOTS
+        num_unlabled_shots = cfg.DATASET.NUM_UNLABELED_SHOTS
         if num_shots >= 1:
             # 有监督学习
             if cfg.TRAINER.STRATEGY == "supervised":
@@ -63,7 +64,7 @@ class DescribableTextures(DatasetBase):
                 seed = cfg.SEED
                 preprocessed = os.path.join(
                     self.split_fewshot_dir,
-                    f"semi_supervised_shot_{num_shots}-seed_{seed}.pkl",
+                    f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabled_shots}-seed_{seed}.pkl",
                 )
 
                 if os.path.exists(preprocessed):
@@ -78,7 +79,7 @@ class DescribableTextures(DatasetBase):
                 else:
                     train_x = self.generate_fewshot_dataset(train, num_shots=num_shots)
                     train_u = self.generate_fewshot_dataset(
-                        train, num_shots=cfg.DATASET.NUM_SHOT_UNLABELED
+                        train, num_shots=num_unlabled_shots
                     )
                     val = self.generate_fewshot_dataset(
                         val, num_shots=min(num_shots, 4)

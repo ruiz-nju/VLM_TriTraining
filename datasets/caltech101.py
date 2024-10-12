@@ -34,13 +34,6 @@ class Caltech101(DatasetBase):
 
         if os.path.exists(self.split_path):
             train, val, test = OxfordPets.read_split(self.split_path, self.image_dir)
-            # print(
-            #     train[0]
-            # )  # <dassl.data.datasets.base_dataset.Datum object at 0x765a74df3e20>
-            # print(
-            #     np.array(train).shape, np.array(val).shape, np.array(test).shape
-            # )  # (4128,) (1649,) (2465,)
-            # pdb.set_trace()
         else:
             train, val, test = DTD.read_and_split_data(
                 self.image_dir, ignored=IGNORED, new_cnames=NEW_CNAMES
@@ -48,6 +41,7 @@ class Caltech101(DatasetBase):
             OxfordPets.save_split(train, val, test, self.split_path, self.image_dir)
 
         num_shots = cfg.DATASET.NUM_SHOTS
+        num_unlabled_shots = cfg.DATASET.NUM_UNLABELED_SHOTS
         if num_shots >= 1:
             # 有监督学习
             if cfg.TRAINER.STRATEGY == "supervised":
@@ -81,7 +75,7 @@ class Caltech101(DatasetBase):
                 seed = cfg.SEED
                 preprocessed = os.path.join(
                     self.split_fewshot_dir,
-                    f"semi_supervised_shot_{num_shots}-seed_{seed}.pkl",
+                    f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabled_shots}-seed_{seed}.pkl",
                 )
 
                 if os.path.exists(preprocessed):
@@ -96,7 +90,7 @@ class Caltech101(DatasetBase):
                 else:
                     train_x = self.generate_fewshot_dataset(train, num_shots=num_shots)
                     train_u = self.generate_fewshot_dataset(
-                        train, num_shots=cfg.DATASET.NUM_SHOT_UNLABELED
+                        train, num_shots=num_unlabled_shots
                     )
                     val = self.generate_fewshot_dataset(
                         val, num_shots=min(num_shots, 4)

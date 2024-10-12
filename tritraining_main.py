@@ -9,20 +9,9 @@ from dassl.engine import build_trainer
 import copy
 import numpy as np
 import sklearn
-from LAMDA_SSL.Dataset.Vision.CIFAR10 import CIFAR10
-from LAMDA_SSL.Evaluation.Classifier.Accuracy import Accuracy
 from dassl.utils import read_image
 from dassl.data.transforms.transforms import build_transform
-from LAMDA_SSL.Transform.ToTensor import ToTensor
-from LAMDA_SSL.Transform.ToImage import ToImage
-from sklearn.pipeline import Pipeline
-import torchvision.transforms as transforms
-from PIL import Image
-from dassl.data.transforms.transforms import Cutout
-from LAMDA_SSL.Transform.Vision.Normalization import Normalization
-from LAMDA_SSL.Transform.ToTensor import ToTensor
-from LAMDA_SSL.Transform.ToImage import ToImage
-from tqdm import tqdm
+from sklearn.metrics import accuracy_score
 
 # custom
 import datasets.oxford_pets
@@ -49,8 +38,6 @@ import trainers.zsclip
 import trainers.maple
 import trainers.vpt
 from trainers.tri_training import Tri_Training
-from LAMDA_SSL.Transform.Vision.Resize import Resize
-from torch.utils.data import DataLoader, TensorDataset
 
 import pdb
 
@@ -134,7 +121,7 @@ def extend_cfg(cfg):
     cfg.TRAINER.STRATEGY = "semi-supervised"  # supervised, semi-supervised
 
     # 无标注数据的 shots
-    cfg.DATASET.NUM_SHOT_UNLABELED = 16
+    cfg.DATASET.NUM_UNLABELED_SHOTS = 16
 
 
 def get_dataset(model):
@@ -172,19 +159,21 @@ def main(args):
 
     train_x, train_u, val, test = get_dataset(coop)
     test_y = [datum.label for datum in test]
-    # print(len(test_y))
-    # pdb.set_trace()
+    print(f"train_x size: {len(train_x)}")
+    print(f"train_u size: {len(train_u)}")
+    print(f"test size: {len(test)}")
 
-    # # # 实例化 Tri_Training 并进行训练和测试
+    # 实例化 Tri_Training 并进行训练和测试
     tri_trainer = Tri_Training(coop, vpt, maple)
 
     tri_trainer.fit(train_x, train_u)
 
     y_pred = tri_trainer.predict(test)
 
-    # # 计算准确率
-    # acc = Accuracy()
-    # print("Accuracy: ", acc.score(y_pred, test_y))
+    # 计算准确度
+
+    accuracy = accuracy_score(test_y, y_pred)
+    print(f"Accuracy: {accuracy}")
 
 
 if __name__ == "__main__":

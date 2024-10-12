@@ -316,8 +316,6 @@ class CoOp(TrainerX):
             self.scaler.update()
         else:
             output = self.model(image)
-            print(output.shape)
-            pdb.set_trace()
             loss = F.cross_entropy(output, label)
             self.model_backward_and_update(loss)
 
@@ -374,31 +372,3 @@ class CoOp(TrainerX):
             )
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
-
-    def predict(self, datums):
-        self.set_model_mode("eval")
-        cfg = self.cfg
-        tfm = build_transform(cfg, is_train=False)
-        dataloader = build_data_loader(
-            cfg,
-            sampler_type=cfg.DATALOADER.TEST.SAMPLER,
-            data_source=datums,
-            batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
-            tfm=tfm,
-            is_train=False,
-        )
-        all_outputs = []
-
-        with torch.no_grad():
-            for batch_X in tqdm(dataloader):
-                batch_X = batch_X[0].to(self.device)  # 从 dataloader 中取出 batch_X
-                output = self.model(batch_X)
-                output = output.max(1)[1]
-                all_outputs.append(output.cpu())  # 移动到 CPU，避免占用 GPU 显存
-
-            # print("CoOp all_output:", len(all_outputs))
-
-        # 将所有 batch 的预测结果拼接成一个完整的 tensor
-        all_outputs = torch.cat(all_outputs, dim=0)
-
-        return all_outputs
