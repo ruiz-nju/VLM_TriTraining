@@ -6,7 +6,7 @@ SHOTS=$2
 UNLABELED_SHOTS=$3
 SEED=$4
 
-# sh scripts/tritraining/classification.sh caltech101 1 1
+# sh scripts/tritraining/classification.sh caltech101 1 16 1
 DIR=output/${TRAINER}/classification/${DATASET}/shots_${SHOTS}/unlabeled_shots_${UNLABELED_SHOTS}/seed_${SEED}
 CUDA_VISIBLE_DEVICES=1 python tritraining_main.py \
     --root ${DATA} \

@@ -12,6 +12,7 @@ import sklearn
 from dassl.utils import read_image
 from dassl.data.transforms.transforms import build_transform
 from sklearn.metrics import accuracy_score
+import os.path as osp
 
 # custom
 import datasets.oxford_pets
@@ -59,6 +60,8 @@ def setup_cfg(args):
             cfg[key].DATASET.ROOT = args.root
         if args.output_dir:
             cfg[key].OUTPUT_DIR = args.output_dir
+        if args.model_dir:
+            cfg[key].MODEL_DIR = args.model_dir
         if args.resume:
             cfg[key].RESUME = args.resume
         if args.seed:
@@ -163,17 +166,24 @@ def main(args):
     print(f"train_u size: {len(train_u)}")
     print(f"test size: {len(test)}")
 
-    # 实例化 Tri_Training 并进行训练和测试
-    tri_trainer = Tri_Training(coop, vpt, maple)
-
-    tri_trainer.fit(train_x, train_u)
-
-    y_pred = tri_trainer.predict(test)
-
-    # 计算准确度
-
-    accuracy = accuracy_score(test_y, y_pred)
-    print(f"Accuracy: {accuracy}")
+    if args.eval_only:
+        coop.custom_load_model(osp.join(cfg["CoOp"].MODEL_DIR, "CoOp"))
+        vpt.custom_load_model(osp.join(cfg["VPT"].MODEL_DIR, "VPT"))
+        maple.custom_load_model(osp.join(cfg["MaPLe"].MODEL_DIR, "MaPLe"))
+        tri_trainer = Tri_Training(coop, vpt, maple)
+        y_pred = tri_trainer.predict(test)
+        # 计算准确度
+        accuracy = accuracy_score(test_y, y_pred)
+        print(f"Accuracy: {accuracy}")
+        return
+    else:
+        # 实例化 Tri_Training 并进行训练和测试
+        tri_trainer = Tri_Training(coop, vpt, maple)
+        tri_trainer.fit(train_x, train_u)
+        y_pred = tri_trainer.predict(test)
+        # 计算准确度
+        accuracy = accuracy_score(test_y, y_pred)
+        print(f"Accuracy: {accuracy}")
 
 
 if __name__ == "__main__":
@@ -190,7 +200,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--seed", type=int, default=-1, help="only positive value enables a fixed seed"
-    )  # 1
+    )
     parser.add_argument(
         "--source-domains", type=str, nargs="+", help="source domains for DA/DG"
     )

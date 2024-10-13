@@ -138,29 +138,8 @@ class Tri_Training:
 
         # 保存三个模型
         for estimator in self.estimators:
-            names = estimator.get_model_names()
+            self.save_model(estimator)
 
-            for name in names:
-                model_dict = estimator._models[name].state_dict()
-
-                optim_dict = None
-                if estimator._optims[name] is not None:
-                    optim_dict = estimator._optims[name].state_dict()
-
-                sched_dict = None
-                if estimator._scheds[name] is not None:
-                    sched_dict = estimator._scheds[name].state_dict()
-
-                save_checkpoint(
-                    {
-                        "state_dict": model_dict,
-                        "optimizer": optim_dict,
-                        "scheduler": sched_dict,
-                    },
-                    osp.join(estimator.output_dir, estimator.cfg.TRAINER.NAME, name),
-                    model_name="final_model.pth.tar",
-                    with_epoch=False,
-                )
         return
 
     def predict(self, datums):
@@ -176,3 +155,27 @@ class Tri_Training:
         # 返回最终的预测结果
         y_pred = pred[0]
         return y_pred
+
+    def save_model(self, estimator):
+        names = estimator.get_model_names()
+        for name in names:
+            model_dict = estimator._models[name].state_dict()
+
+            optim_dict = None
+            if estimator._optims[name] is not None:
+                optim_dict = estimator._optims[name].state_dict()
+
+            sched_dict = None
+            if estimator._scheds[name] is not None:
+                sched_dict = estimator._scheds[name].state_dict()
+
+            save_checkpoint(
+                {
+                    "state_dict": model_dict,
+                    "optimizer": optim_dict,
+                    "scheduler": sched_dict,
+                },
+                osp.join(estimator.output_dir, estimator.cfg.TRAINER.NAME, name),
+                model_name="final_model.pth.tar",
+                with_epoch=False,
+            )

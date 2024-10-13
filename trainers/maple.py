@@ -387,3 +387,29 @@ class MaPLe(TrainerX):
             )
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
+
+    def custom_load_model(self, dir):
+        if not osp.exists(dir):
+            raise FileNotFoundError("No pretrained model is given")
+
+        names = self.get_model_names()
+        model_file = "final_model.pth.tar"
+
+        for name in names:
+            model_path = osp.join(dir, name, model_file)
+            if not osp.exists(model_path):
+                raise FileNotFoundError('Model not found at "{}"'.format(model_path))
+
+            checkpoint = load_checkpoint(model_path)
+            state_dict = checkpoint["state_dict"]
+
+            # Ignore fixed token vectors
+            if "prompt_learner.token_prefix" in state_dict:
+                del state_dict["prompt_learner.token_prefix"]
+
+            if "prompt_learner.token_suffix" in state_dict:
+                del state_dict["prompt_learner.token_suffix"]
+
+            print("Loading weights to {} " 'from "{}")'.format(name, model_path))
+            # set strict=False
+            self._models[name].load_state_dict(state_dict, strict=False)
