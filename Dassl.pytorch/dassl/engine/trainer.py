@@ -396,7 +396,7 @@ class SimpleTrainer(TrainerBase):
         self.start_epoch = self.resume_model_if_exist(directory)
 
         # Initialize summary writer
-        writer_dir = osp.join(self.output_dir, "tensorboard")
+        writer_dir = osp.join(self.output_dir, self.cfg.TRAINER.NAME, "tensorboard")
         mkdir_if_missing(writer_dir)
         self.init_writer(writer_dir)
 
@@ -643,6 +643,8 @@ class TrainerX(SimpleTrainer):
     def fit(self, labeled_datums, unlabeled_datums=None, pseudo_labels=None):
         # 因为要多次调用 fit，所以需要手动设置 start_epoch 为 0
         self.start_epoch = 0
+        if hasattr(self, "step_counter"):
+            self.step_counter = 1
         train_dataset = labeled_datums
 
         if unlabeled_datums is not None:

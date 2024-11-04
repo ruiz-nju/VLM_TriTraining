@@ -1,6 +1,7 @@
 """
 Modified from https://github.com/KaiyangZhou/deep-person-reid
 """
+
 import warnings
 import torch
 import torch.nn as nn
@@ -32,9 +33,7 @@ def build_optimizer(model, optim_cfg, param_groups=None):
     base_lr_mult = optim_cfg.BASE_LR_MULT
 
     if optim not in AVAI_OPTIMS:
-        raise ValueError(
-            f"optim must be one of {AVAI_OPTIMS}, but got {optim}"
-        )
+        raise ValueError(f"optim must be one of {AVAI_OPTIMS}, but got {optim}")
 
     if param_groups is not None and staged_lr:
         warnings.warn(
@@ -70,13 +69,8 @@ def build_optimizer(model, optim_cfg, param_groups=None):
                     base_layers.append(name)
 
             param_groups = [
-                {
-                    "params": base_params,
-                    "lr": lr * base_lr_mult
-                },
-                {
-                    "params": new_params
-                },
+                {"params": base_params, "lr": lr * base_lr_mult},
+                {"params": new_params},
             ]
 
         else:
@@ -91,6 +85,7 @@ def build_optimizer(model, optim_cfg, param_groups=None):
             lr=lr,
             weight_decay=weight_decay,
             betas=(adam_beta1, adam_beta2),
+            eps=1e-3,
         )
 
     elif optim == "amsgrad":

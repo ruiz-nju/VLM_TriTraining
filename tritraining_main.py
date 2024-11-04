@@ -31,13 +31,14 @@ import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
 import datasets.cifar10
-from LAMDA_SSL.Split.DataSplit import DataSplit
 import trainers.coop
 import trainers.cocoop
 import trainers.tri_training
 import trainers.zsclip
 import trainers.maple
 import trainers.vpt
+import trainers.promptsrc
+import trainers.tcp
 from trainers.tri_training import Tri_Training
 
 import pdb
@@ -46,16 +47,14 @@ import pdb
 def setup_cfg(args):
     print("----------Build up cfg----------")
     cfg = {
-        "CoOp": get_cfg_default(),
-        "VPT": get_cfg_default(),
+        "PromptSRC": get_cfg_default(),
+        "TCP": get_cfg_default(),
         "MaPLe": get_cfg_default(),
     }
     for key in cfg.keys():
         extend_cfg(cfg[key])
         cfg[key].merge_from_file(args.dataset_config_file)
-        cfg[key].merge_from_file(
-            f"/mnt/hdd/zhurui/code/TriTraining/configs/trainers/TriTraining/{key}.yaml"
-        )
+        cfg[key].merge_from_file(f"./configs/trainers/TriTraining/{key}.yaml")
         if args.root:
             cfg[key].DATASET.ROOT = args.root
         if args.output_dir:
@@ -87,9 +86,11 @@ def extend_cfg(cfg):
 
     # Config for CoOp
     cfg.TRAINER.COOP = CN()
+    cfg.TRAINER.COOP.ALPHA = 1.0
     cfg.TRAINER.COOP.N_CTX = 16  # number of context vectors
     cfg.TRAINER.COOP.CSC = False  # class-specific context
-    cfg.TRAINER.COOP.CTX_INIT = ""  # initialization words
+    cfg.TRAINER.COOP.CTX_INIT = False  # initialization words
+    cfg.TRAINER.COOP.W = 1.0
     cfg.TRAINER.COOP.PREC = "fp16"  # fp16, fp32, amp
     cfg.TRAINER.COOP.CLASS_TOKEN_POSITION = "end"  # 'middle' or 'end' or 'front'
 
@@ -116,6 +117,49 @@ def extend_cfg(cfg):
     cfg.TRAINER.VPT.PROMPT_DEPTH_VISION = (
         1  # if set to 1, will represent shallow vision prompting only
     )
+    # Config for independent Vision Language prompting (independent-vlp)
+    cfg.TRAINER.IVLP = CN()
+    cfg.TRAINER.IVLP.N_CTX_VISION = 2  # number of context vectors at the vision branch
+    cfg.TRAINER.IVLP.N_CTX_TEXT = 2  # number of context vectors at the language branch
+    cfg.TRAINER.IVLP.CTX_INIT = (
+        "a photo of a"  # initialization words (only for language prompts)
+    )
+    cfg.TRAINER.IVLP.PREC = "fp16"  # fp16, fp32, amp
+    # If both variables below are set to 0, 0, will the config will degenerate to COOP model
+    cfg.TRAINER.IVLP.PROMPT_DEPTH_VISION = (
+        9  # Max 12, minimum 0, for 0 it will act as shallow IVLP prompting (J=1)
+    )
+    cfg.TRAINER.IVLP.PROMPT_DEPTH_TEXT = (
+        9  # Max 12, minimum 0, for 0 it will act as shallow IVLP prompting(J=1)
+    )
+
+    # Config for PromptSRC
+    cfg.TRAINER.PROMPTSRC = CN()
+    cfg.TRAINER.PROMPTSRC.N_CTX_VISION = (
+        4  # number of context vectors at the vision branch
+    )
+    cfg.TRAINER.PROMPTSRC.N_CTX_TEXT = (
+        4  # number of context vectors at the language branch
+    )
+    cfg.TRAINER.PROMPTSRC.CTX_INIT = "a photo of a"  # initialization words
+    cfg.TRAINER.PROMPTSRC.PREC = "fp16"  # fp16, fp32, amp
+    cfg.TRAINER.PROMPTSRC.PROMPT_DEPTH_VISION = (
+        9  # Max 12, minimum 0, for 0 it will be using shallow IVLP prompting (J=1)
+    )
+    cfg.TRAINER.PROMPTSRC.PROMPT_DEPTH_TEXT = (
+        9  # Max 12, minimum 0, for 0 it will be using shallow IVLP prompting (J=1)
+    )
+    cfg.TRAINER.PROMPTSRC.TEXT_LOSS_WEIGHT = 25
+    cfg.TRAINER.PROMPTSRC.IMAGE_LOSS_WEIGHT = 10
+    cfg.TRAINER.PROMPTSRC.GPA_MEAN = 15
+    cfg.TRAINER.PROMPTSRC.GPA_STD = 1
+
+    cfg.LOSS = CN()
+    cfg.LOSS.GM = False
+    cfg.LOSS.NAME = ""
+    cfg.LOSS.ALPHA = 0.0
+    cfg.LOSS.T = 1.0
+    cfg.LOSS.LAMBDA = 1.0
 
     # 默认的采样设置为 all，可以根据需要进行调整
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
@@ -124,7 +168,7 @@ def extend_cfg(cfg):
     cfg.TRAINER.STRATEGY = "semi-supervised"  # supervised, semi-supervised
 
     # 无标注数据的 shots
-    cfg.DATASET.NUM_UNLABELED_SHOTS = 16
+    cfg.DATASET.NUM_UNLABELED_SHOTS = 0
 
 
 def get_dataset(model):
@@ -138,7 +182,7 @@ def get_dataset(model):
 
 def main(args):
     cfg = setup_cfg(args)
-    base_cfg = cfg["CoOp"]
+    base_cfg = cfg["PromptSRC"]
 
     if base_cfg.SEED >= 0:
         print("Setting fixed seed: {}".format(base_cfg.SEED))
@@ -148,29 +192,29 @@ def main(args):
     if torch.cuda.is_available() and base_cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
 
-    print("----------Build up CoOp----------")
-    print(f"Config of CoOp:\n{cfg['CoOp']}")
-    coop = build_trainer(cfg["CoOp"])
+    print("----------Build up PromptSRC----------")
+    print(f"Config of PromptSRC: {cfg['PromptSRC']}")
+    promptsrc = build_trainer(cfg["PromptSRC"])
 
-    print("----------Build up VPT----------")
-    print(f"Config of VPT:\n{cfg['VPT']}")
-    vpt = build_trainer(cfg["VPT"])
+    print("----------Build up TCP----------")
+    print(f"Config of TCP: {cfg['TCP']}")
+    tcp = build_trainer(cfg["TCP"])
 
     print("----------Build up MaPLe----------")
-    print(f"Config of MaPLe:\n{cfg['MaPLe']}")
+    print(f"Config of MaPLe: {cfg['MaPLe']}")
     maple = build_trainer(cfg["MaPLe"])
 
-    train_x, train_u, val, test = get_dataset(coop)
+    train_x, train_u, val, test = get_dataset(promptsrc)
     test_y = [datum.label for datum in test]
     print(f"train_x size: {len(train_x)}")
     print(f"train_u size: {len(train_u)}")
     print(f"test size: {len(test)}")
 
     if args.eval_only:
-        coop.custom_load_model(osp.join(cfg["CoOp"].MODEL_DIR, "CoOp"))
-        vpt.custom_load_model(osp.join(cfg["VPT"].MODEL_DIR, "VPT"))
+        promptsrc.custom_load_model(osp.join(cfg["PromptSRC"].MODEL_DIR, "PromptSRC"))
+        tcp.custom_load_model(osp.join(cfg["TCP"].MODEL_DIR, "TCP"))
         maple.custom_load_model(osp.join(cfg["MaPLe"].MODEL_DIR, "MaPLe"))
-        tri_trainer = Tri_Training(coop, vpt, maple)
+        tri_trainer = Tri_Training(promptsrc, tcp, maple)
         y_pred = tri_trainer.predict(test)
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
@@ -178,7 +222,7 @@ def main(args):
         return
     else:
         # 实例化 Tri_Training 并进行训练和测试
-        tri_trainer = Tri_Training(coop, vpt, maple)
+        tri_trainer = Tri_Training(promptsrc, tcp, maple)
         tri_trainer.fit(train_x, train_u)
         y_pred = tri_trainer.predict(test)
         # 计算准确度

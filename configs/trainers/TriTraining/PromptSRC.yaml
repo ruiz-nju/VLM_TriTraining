@@ -1,3 +1,4 @@
+# PromptSRC: Prompting with Self-regularizing constraints
 DATALOADER:
   TRAIN_X:
     BATCH_SIZE: 4
@@ -14,7 +15,7 @@ INPUT:
 
 OPTIM:
   NAME: "sgd"
-  LR: 0.0035
+  LR: 0.0025
   MAX_EPOCH: 50
   # MAX_EPOCH: 2
   LR_SCHEDULER: "cosine"
@@ -25,18 +26,25 @@ OPTIM:
 TRAIN:
   PRINT_FREQ: 20
 
-TEST:
-  FINAL_MODEL: "best_val"
-
 MODEL:
   BACKBONE:
     NAME: "ViT-B/16"
 
 TRAINER:
-  NAME: "MaPLe"
-  MAPLE:
-    N_CTX: 2
+  NAME: "PromptSRC"  
+  PROMPTSRC:
+    N_CTX_VISION: 4
+    N_CTX_TEXT: 4
     CTX_INIT: "a photo of a"
     PREC: "fp16"
-    PROMPT_DEPTH: 9
-    
+    PROMPT_DEPTH_VISION: 9
+    PROMPT_DEPTH_TEXT: 9
+    TEXT_LOSS_WEIGHT: 25
+    IMAGE_LOSS_WEIGHT: 10
+# # Use the below configuration for: ImageNet, Caltech101, OxfordPets, Food101, UCF101 and  SUN397
+#     GPA_MEAN: 30
+#     GPA_STD: 30
+# # Use the below configuration for: StanfordCars, Flowers102, FGVCAircraft, DTD and EuroSAT
+    GPA_MEAN: 45
+    GPA_STD: 5
+  
