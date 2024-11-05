@@ -170,6 +170,8 @@ def extend_cfg(cfg):
     # 无标注数据的 shots
     cfg.DATASET.NUM_UNLABELED_SHOTS = 0
 
+    cfg.TRAIN_OR_TEST = "train"
+
 
 def get_dataset(model):
     return (
@@ -193,15 +195,15 @@ def main(args):
         torch.backends.cudnn.benchmark = True
 
     print("----------Build up PromptSRC----------")
-    print(f"Config of PromptSRC: {cfg['PromptSRC']}")
+    # print(f"Config of PromptSRC: {cfg['PromptSRC']}")
     promptsrc = build_trainer(cfg["PromptSRC"])
 
     print("----------Build up TCP----------")
-    print(f"Config of TCP: {cfg['TCP']}")
+    # print(f"Config of TCP: {cfg['TCP']}")
     tcp = build_trainer(cfg["TCP"])
 
     print("----------Build up MaPLe----------")
-    print(f"Config of MaPLe: {cfg['MaPLe']}")
+    # print(f"Config of MaPLe: {cfg['MaPLe']}")
     maple = build_trainer(cfg["MaPLe"])
 
     train_x, train_u, val, test = get_dataset(promptsrc)
@@ -214,20 +216,18 @@ def main(args):
         promptsrc.custom_load_model(osp.join(cfg["PromptSRC"].MODEL_DIR, "PromptSRC"))
         tcp.custom_load_model(osp.join(cfg["TCP"].MODEL_DIR, "TCP"))
         maple.custom_load_model(osp.join(cfg["MaPLe"].MODEL_DIR, "MaPLe"))
-        tri_trainer = Tri_Training(promptsrc, tcp, maple)
+        tri_trainer = Tri_Training(tcp, promptsrc, maple)
         y_pred = tri_trainer.predict(test)
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
+        print(test_y[:100])
+        print(y_pred[:100])
         print(f"Accuracy: {accuracy}")
         return
     else:
-        # 实例化 Tri_Training 并进行训练和测试
+        # 实例化 Tri_Training 并进行训练
         tri_trainer = Tri_Training(promptsrc, tcp, maple)
         tri_trainer.fit(train_x, train_u)
-        y_pred = tri_trainer.predict(test)
-        # 计算准确度
-        accuracy = accuracy_score(test_y, y_pred)
-        print(f"Accuracy: {accuracy}")
 
 
 if __name__ == "__main__":

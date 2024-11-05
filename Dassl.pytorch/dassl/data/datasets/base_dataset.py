@@ -7,6 +7,7 @@ from collections import defaultdict
 import gdown
 
 from dassl.utils import check_isfile
+import pdb
 
 
 class Datum:
@@ -64,12 +65,17 @@ class DatasetBase:
     dataset_dir = ""  # the directory where the dataset is stored
     domains = []  # string names of all domains
 
-    def __init__(self, train_x=None, train_u=None, val=None, test=None):
+    def __init__(self, train_x=None, train_u=None, val=None, test=None, cfg=None):
         self._train_x = train_x  # labeled training data
         self._train_u = train_u  # unlabeled training data (optional)
         self._val = val  # validation data (optional)
         self._test = test  # test data
-        self._num_classes = self.get_num_classes(train_x)
+        if cfg.TRAIN_OR_TEST == "train" and train_u is not None:
+            self._num_classes = self.get_num_classes(train_u)
+        elif cfg.TRAIN_OR_TEST == "test":
+            self._num_classes = self.get_num_classes(test)
+        else:
+            self._num_classes = self.get_num_classes(train_x)
         self._lab2cname, self._classnames = self.get_lab2cname(train_x)
 
     @property

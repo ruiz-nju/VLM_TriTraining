@@ -90,10 +90,12 @@ class OxfordPets(DatasetBase):
                     with open(preprocessed, "wb") as file:
                         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
                 subsample = cfg.DATASET.SUBSAMPLE_CLASSES
-                train_x, train_u, val, test = OxfordPets.subsample_classes(
-                    train_x, train_u, val, test, subsample=subsample
+                train_x, val, test = OxfordPets.subsample_classes(
+                    train_x, val, test, subsample=subsample
                 )
-                super().__init__(train_x=train_x, train_u=train_u, val=val, test=test)
+                super().__init__(
+                    train_x=train_x, train_u=train_u, val=val, test=test, cfg=cfg
+                )
 
     def read_data(self, split_file):
         filepath = os.path.join(self.anno_dir, split_file)

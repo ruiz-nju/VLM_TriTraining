@@ -3,6 +3,7 @@ import sklearn
 import pdb
 from dassl.utils import save_checkpoint
 import os.path as osp
+import math
 
 
 class Tri_Training:
@@ -52,7 +53,8 @@ class Tri_Training:
         # print(len(train_x), len(train_u)) # 800 800
         # print(train_x[0]) # <dassl.data.datasets.base_dataset.Datum object at 0x75ecd4b667c0>
         # print(train_u[0]) # <dassl.data.datasets.base_dataset.Datum object at 0x75ecd4cb35e0>
-
+        num_classes = max(datum._real_label for datum in train_u) + 1
+        min_new_label = math.ceil(num_classes / 2)
         # 初始化每个分类器的训练，使用带放回抽样生成新的训练集
         for i in range(3):
             sub_train_x = sklearn.utils.resample(train_x)
@@ -69,8 +71,6 @@ class Tri_Training:
         update = [False] * 3
         # lb_X 和 lb_y: 用于存储标记样本的特征和标签
         lb_train_u, lb_y = [[]] * 3, [[]] * 3
-        # num_lb_base = [0] * 3
-        # num_lb_new = [0] * 3
         improve = True
         iter = 0
 
@@ -127,9 +127,14 @@ class Tri_Training:
                     print(f"----------------{i} is being updated----------------")
                     # 将标记数据集与新标记的未标记样本合并，并重新训练模型
                     print(f"Add {len(lb_y[i])} new labeled samples to model {i}")
+                    num_base_label = sum(1 for lb in lb_y[i] if lb < min_new_label)
+                    num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
+                    print(f"Number of base labels: {num_base_label}")
+                    print(f"Number of new labels: {num_new_label}")
                     self.estimators[i].fit(
                         train_x, lb_train_u[i], lb_y[i], max_epoch=20
                     )
+                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=2)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
