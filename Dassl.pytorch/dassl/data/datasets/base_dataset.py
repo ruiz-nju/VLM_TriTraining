@@ -27,6 +27,7 @@ class Datum:
         self._label = label
         self._domain = domain
         self._classname = classname
+        self._real_label = label
 
     # semi-supervised 设置下，用来打伪标签
     def bound_pseudo_label(self, pseudo_label):
@@ -39,6 +40,10 @@ class Datum:
     @property
     def label(self):
         return self._label
+
+    @property
+    def real_label(self):
+        return self._real_label
 
     @property
     def domain(self):
@@ -105,7 +110,7 @@ class DatasetBase:
         label_set = set()
         for item in data_source:
             label_set.add(item.label)
-        return max(label_set) + 1
+        return max(label_set) - min(label_set) + 1
 
     @staticmethod
     def get_lab2cname(data_source):

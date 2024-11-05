@@ -1,3 +1,3 @@
-# Tri-Training with CoOp, VPT and MaPLe
+# VLM_Tri-Training
 
-Construct a Tri-Training framework using CoOp, VPT, and MaPLe as base estimators, and evaluate its accuracy on multiple semi-supervised learning benchmarks.
+Construct a Tri-Training framework using VLMs as base estimators, and evaluate its accuracy on multiple semi-supervised learning benchmarks.

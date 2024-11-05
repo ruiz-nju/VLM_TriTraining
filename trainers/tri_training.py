@@ -69,11 +69,12 @@ class Tri_Training:
         update = [False] * 3
         # lb_X 和 lb_y: 用于存储标记样本的特征和标签
         lb_train_u, lb_y = [[]] * 3, [[]] * 3
+        # num_lb_base = [0] * 3
+        # num_lb_new = [0] * 3
         improve = True
         iter = 0
 
-        # 不断迭代直到模型不再更新（即 update 全为 False）
-        while improve:
+        while improve and iter < 1:
             iter += 1
             print("iteration:", iter)
 
@@ -115,9 +116,7 @@ class Tri_Training:
                             update[i] = True
                         elif l_prime[i] > e[i] / (e_prime[i] - e[i]):
                             # 随机选择部分样本来更新模型
-                            lb_index = np.random.choice(
-                                len(lb_y[i]), int(e_prime[i] * l_prime[i] / e[i] - 1)
-                            )
+                            lb_index = np.random.choice(len(lb_y[i]), len(lb_y[i]) // 2)
                             lb_train_u[i] = [lb_train_u[i][idx] for idx in lb_index]
                             lb_y[i] = [lb_y[i][idx] for idx in lb_index]
                             update[i] = True
@@ -127,7 +126,10 @@ class Tri_Training:
                 if update[i]:
                     print(f"----------------{i} is being updated----------------")
                     # 将标记数据集与新标记的未标记样本合并，并重新训练模型
-                    self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i])
+                    print(f"Add {len(lb_y[i])} new labeled samples to model {i}")
+                    self.estimators[i].fit(
+                        train_x, lb_train_u[i], lb_y[i], max_epoch=20
+                    )
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])

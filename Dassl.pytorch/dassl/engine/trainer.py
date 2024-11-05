@@ -640,7 +640,9 @@ class TrainerX(SimpleTrainer):
 
     # 下面全是为 TriTraining 自定义的函数
     # 自定义数据的 fit
-    def fit(self, labeled_datums, unlabeled_datums=None, pseudo_labels=None):
+    def fit(
+        self, labeled_datums, unlabeled_datums=None, pseudo_labels=None, max_epoch=None
+    ):
         # 因为要多次调用 fit，所以需要手动设置 start_epoch 为 0
         self.start_epoch = 0
         if hasattr(self, "step_counter"):
@@ -664,6 +666,8 @@ class TrainerX(SimpleTrainer):
             tfm=self.dm.tfm_train,
             is_train=True,
         )
+        if max_epoch is not None:
+            self.max_epoch = max_epoch
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()
             self.custom_run_epoch(dataloader)
