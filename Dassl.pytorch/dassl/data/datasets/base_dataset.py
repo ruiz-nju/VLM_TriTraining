@@ -70,13 +70,19 @@ class DatasetBase:
         self._train_u = train_u  # unlabeled training data (optional)
         self._val = val  # validation data (optional)
         self._test = test  # test data
-        if cfg.TRAIN_OR_TEST == "train" and train_u is not None:
-            self._num_classes = self.get_num_classes(train_u)
-        elif cfg.TRAIN_OR_TEST == "test":
-            self._num_classes = self.get_num_classes(test)
-        else:
+        if cfg is None:
             self._num_classes = self.get_num_classes(train_x)
-        self._lab2cname, self._classnames = self.get_lab2cname(train_x)
+            self._lab2cname, self._classnames = self.get_lab2cname(train_x)
+        else:
+            if cfg.TRAIN_OR_TEST == "train" and train_u is not None:
+                self._num_classes = self.get_num_classes(train_u)
+                self._lab2cname, self._classnames = self.get_lab2cname(train_u)
+            elif cfg.TRAIN_OR_TEST == "test":
+                self._num_classes = self.get_num_classes(test)
+                self._lab2cname, self._classnames = self.get_lab2cname(test)
+            else:
+                self._num_classes = self.get_num_classes(train_x)
+                self._lab2cname, self._classnames = self.get_lab2cname(train_x)
 
     @property
     def train_x(self):

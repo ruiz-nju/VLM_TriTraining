@@ -9,7 +9,6 @@ import math
 class Tri_Training:
     def __init__(self, base_estimator_1, base_estimator_2, base_estimator_3):
         # 初始化函数，接受三个基本分类器
-        # 三个模型分别是 CoOp，VPT 和 MaPLe
         self.estimators = [base_estimator_1, base_estimator_2, base_estimator_3]
 
     def measure_error(self, datums, j, k):

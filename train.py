@@ -21,7 +21,7 @@ import datasets.imagenet_sketch
 import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
-import datasets.cifar10
+
 
 import trainers.coop
 import trainers.cocoop

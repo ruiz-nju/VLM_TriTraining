@@ -735,10 +735,8 @@ class TrainerX(SimpleTrainer):
             is_train=False,
         )
         all_outputs = []
-        # print("VPT X:", X.shape)
         with torch.no_grad():
             for batch_X in tqdm(dataloader):
-                # batch_X = batch_X[0].to(self.device)
                 batch_X = batch_X["img"].to(self.device)
                 output = self.model(batch_X)
                 output = output.max(1)[1]
