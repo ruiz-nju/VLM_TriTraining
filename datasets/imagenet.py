@@ -39,26 +39,71 @@ class ImageNet(DatasetBase):
                 pickle.dump(preprocessed, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         num_shots = cfg.DATASET.NUM_SHOTS
+        num_unlabled_shots = cfg.DATASET.NUM_UNLABELED_SHOTS
         if num_shots >= 1:
-            seed = cfg.SEED
-            preprocessed = os.path.join(self.split_fewshot_dir, f"shot_{num_shots}-seed_{seed}.pkl")
-            
-            if os.path.exists(preprocessed):
-                print(f"Loading preprocessed few-shot data from {preprocessed}")
-                with open(preprocessed, "rb") as file:
-                    data = pickle.load(file)
-                    train = data["train"]
-            else:
-                train = self.generate_fewshot_dataset(train, num_shots=num_shots)
-                data = {"train": train}
-                print(f"Saving preprocessed few-shot data to {preprocessed}")
-                with open(preprocessed, "wb") as file:
-                    pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
+            # 有监督学习
+            if cfg.TRAINER.STRATEGY == "supervised":
+                seed = cfg.SEED
+                preprocessed = os.path.join(
+                    self.split_fewshot_dir,
+                    f"supervised_shot_{num_shots}-seed_{seed}.pkl",
+                )
 
-        subsample = cfg.DATASET.SUBSAMPLE_CLASSES
-        train, test = OxfordPets.subsample_classes(train, test, subsample=subsample)
+                if os.path.exists(preprocessed):
+                    print(f"Loading preprocessed few-shot data from {preprocessed}")
+                    with open(preprocessed, "rb") as file:
+                        data = pickle.load(file)
+                        train_x, val = data["train_x"], data["val"]
+                else:
+                    train_x = self.generate_fewshot_dataset(train, num_shots=num_shots)
+                    val = self.generate_fewshot_dataset(
+                        val, num_shots=min(num_shots, 4)
+                    )
+                    data = {"train_x": train_x, "val": val}
+                    print(f"Saving preprocessed few-shot data to {preprocessed}")
+                    with open(preprocessed, "wb") as file:
+                        pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
+                subsample = cfg.DATASET.SUBSAMPLE_CLASSES
+                train_x, val, test = OxfordPets.subsample_classes(
+                    train_x, val, test, subsample=subsample
+                )
+                super().__init__(train_x=train_x, val=val, test=test)
+            elif cfg.TRAINER.STRATEGY == "semi-supervised":
+                # 半监督学习
+                seed = cfg.SEED
+                preprocessed = os.path.join(
+                    self.split_fewshot_dir,
+                    f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabled_shots}-seed_{seed}.pkl",
+                )
 
-        super().__init__(train_x=train, val=test, test=test)
+                if os.path.exists(preprocessed):
+                    print(f"Loading preprocessed few-shot data from {preprocessed}")
+                    with open(preprocessed, "rb") as file:
+                        data = pickle.load(file)
+                        train_x, train_u, val = (
+                            data["train_x"],
+                            data["train_u"],
+                            data["val"],
+                        )
+                else:
+                    train_x = self.generate_fewshot_dataset(train, num_shots=num_shots)
+                    train_u = self.generate_fewshot_dataset(
+                        train, num_shots=num_unlabled_shots
+                    )
+                    val = self.generate_fewshot_dataset(
+                        val, num_shots=min(num_shots, 4)
+                    )
+                    data = {"train_x": train_x, "train_u": train_u, "val": val}
+                    print(f"Saving preprocessed few-shot data to {preprocessed}")
+                    with open(preprocessed, "wb") as file:
+                        pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
+                subsample = cfg.DATASET.SUBSAMPLE_CLASSES
+                train_x, val, test = OxfordPets.subsample_classes(
+                    train_x, val, test, subsample=subsample
+                )
+                super().__init__(
+                    train_x=train_x, train_u=train_u, val=val, test=test, cfg=cfg
+                )
 
     @staticmethod
     def read_classnames(text_file):
