@@ -81,12 +81,6 @@ class DataManager:
             is_train=True,
             dataset_wrapper=dataset_wrapper,
         )
-        # print(
-        #     dataset.train_x[0].impath,
-        #     dataset.train_x[0].label,
-        #     dataset.train_x[0].domain,
-        #     dataset.train_x[0].classname,
-        # )  # /mnt/hdd/zhurui/data/CIFAR10/test/airplane/test_6574.png 0 0 airplane
         # Build train_loader_u
         train_loader_u = None
         if dataset.train_u:

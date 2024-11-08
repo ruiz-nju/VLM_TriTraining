@@ -1,4 +1,4 @@
-DATA=/mnt/hdd/zhurui/data
+DATA=/mnt/hdd/DATA
 TRAINER=TriTraining
 
 DATASET=$1

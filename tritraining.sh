@@ -8,9 +8,9 @@
 #     done
 # done
 
-for dataset in dtd fgvc_aircraft caltech101
+for dataset in imagenet
 do 
-    for seed in 1
+    for seed in 3
     do 
         sh scripts/tritraining/base2novel_train.sh $dataset 16 0 $seed
         sh scripts/tritraining/base2novel_test_base.sh $dataset 16 0 $seed
