@@ -1,16 +1,9 @@
 #!/bin/bash
 
 
-# for shot in 1 2 4 8 16
-#     do
-#         sh scripts/tritraining/base2novel_train.sh caltech101 $shot 0 3
-#         sh scripts/tritraining/base2novel_test.sh caltech101 $shot 0 3
-#     done
-# done
-
-for dataset in imagenet
+for dataset in caltech101 dtd eurosat fgvc_aircraft food101 imagenet oxford_flowers oxford_pets stanford_cars sun397 ucf101
 do 
-    for seed in 3
+    for seed in 1 2 3
     do 
         sh scripts/tritraining/base2novel_train.sh $dataset 16 0 $seed
         sh scripts/tritraining/base2novel_test_base.sh $dataset 16 0 $seed
