@@ -216,12 +216,19 @@ def main(args):
         tcp.custom_load_model(osp.join(cfg["TCP"].MODEL_DIR, "TCP"))
         maple.custom_load_model(osp.join(cfg["MaPLe"].MODEL_DIR, "MaPLe"))
         tri_trainer = Tri_Training(tcp, promptsrc, maple)
+        y_src = promptsrc.predict(test)
+        y_tcp = tcp.predict(test)
+        y_maple = maple.predict(test)
         y_pred = tri_trainer.predict(test)
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
-        print(test_y[:100])
-        print(y_pred[:100])
+        acc_src = accuracy_score(test_y, y_src)
+        acc_tcp = accuracy_score(test_y, y_tcp)
+        acc_maple = accuracy_score(test_y, y_maple)
         print(f"Accuracy: {accuracy}")
+        print(f"Accuracy of PromptSRC: {acc_src}")
+        print(f"Accuracy of TCP: {acc_tcp}")
+        print(f"Accuracy of MaPLe: {acc_maple}")
         return
     else:
         # 实例化 Tri_Training 并进行训练
