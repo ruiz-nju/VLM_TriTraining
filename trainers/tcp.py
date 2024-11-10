@@ -431,3 +431,21 @@ class TCP(TrainerX):
             print("Loading weights to {} " 'from "{}")'.format(name, model_path))
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
+
+    def reset_training_status(self, custom_max_epoch=None):
+        self.start_epoch = self.epoch = 0
+        self.proto = None
+
+        # 重置优化器和学习率调度器
+        self.optim = build_optimizer(self.model.prompt_learner, self.cfg.OPTIM)
+        self.sched = build_lr_scheduler(self.optim, self.cfg.OPTIM)
+        self._optims["prompt_learner"] = self.optim
+        self._scheds["prompt_learner"] = self.sched
+
+        self.scaler = GradScaler() if self.cfg.TRAINER.COOP.PREC == "amp" else None
+
+        # 重置自定义最大轮次
+        if custom_max_epoch is not None:
+            self.max_epoch = custom_max_epoch
+
+        print("TCP's training status has been reset.")

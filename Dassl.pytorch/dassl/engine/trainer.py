@@ -639,16 +639,18 @@ class TrainerX(SimpleTrainer):
         return input, label, domain
 
     # 下面全是为 TriTraining 自定义的函数
+
+    def reset_training_status(self, custom_max_epoch=None):
+        """
+        重置模型训练的状态
+        """
+        pass
+
     # 自定义数据的 fit
     def fit(
         self, labeled_datums, unlabeled_datums=None, pseudo_labels=None, max_epoch=None
     ):
-        if max_epoch is not None:
-            self.max_epoch = max_epoch
-        # 因为要多次调用 fit，所以需要手动设置 start_epoch 为 0
-        self.start_epoch = 0
-        if hasattr(self, "step_counter"):
-            self.step_counter = 1
+        self.reset_training_status(custom_max_epoch=max_epoch)
         train_dataset = labeled_datums
 
         if unlabeled_datums is not None:

@@ -1,5 +1,7 @@
 import copy
 import os.path as osp
+import datetime
+import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,6 +14,7 @@ from dassl.optim import build_optimizer, build_lr_scheduler
 from clip import clip
 from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 from .imagenet_templates import IMAGENET_TEMPLATES
+from dassl.data.data_manager import build_data_loader
 import pdb
 
 _tokenizer = _Tokenizer()
@@ -489,3 +492,34 @@ class PromptSRC(TrainerX):
             print("Loading weights to {} " 'from "{}")'.format(name, model_path))
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
+
+    def reset_training_status(self, custom_max_epoch=None):
+        """
+        重置模型训练的状态
+        """
+        self.start_epoch = self.epoch = 0
+
+        if custom_max_epoch is not None:
+            self.max_epoch = custom_max_epoch
+            self.total_epochs = custom_max_epoch
+            N = custom_max_epoch
+            mean = self.cfg.TRAINER.PROMPTSRC.GPA_MEAN
+            stdev = self.cfg.TRAINER.PROMPTSRC.GPA_STD
+            gauss = self.get_gauss(mean, stdev)
+            self.gauss = np.array([gauss(a) for a in range(1, N + 1)])
+            self.gauss = self.gauss / sum(self.gauss)
+
+        # 重置优化器和学习率调度器
+        self.optim = build_optimizer(self.model, self.cfg.OPTIM)
+        self.sched = build_lr_scheduler(self.optim, self.cfg.OPTIM)
+        self._optims["VLPromptLearner"] = self.optim
+        self._scheds["VLPromptLearner"] = self.sched
+
+        # 重置 GPA 相关状态
+        self.previous_model_gpa = None
+        self.step_counter = 1
+
+        # 重置混合精度缩放器
+        self.scaler = GradScaler() if self.cfg.TRAINER.PROMPTSRC.PREC == "amp" else None
+
+        print("PromptSRC's training status has been reset.")
