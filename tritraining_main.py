@@ -45,37 +45,33 @@ import pdb
 
 def setup_cfg(args, model_names):
     print("----------Build up cfg----------")
-    cfg = {
-        model_names[0]: get_cfg_default(),
-        model_names[1]: get_cfg_default(),
-        model_names[2]: get_cfg_default(),
-    }
-    for key in cfg.keys():
-        extend_cfg(cfg[key])
-        cfg[key].merge_from_file(args.dataset_config_file)
-        cfg[key].merge_from_file(f"./configs/trainers/TriTraining/{key}.yaml")
+    cfg = [get_cfg_default() for _ in range(3)]
+    for i in range(3):
+        extend_cfg(cfg[i])
+        cfg[i].merge_from_file(args.dataset_config_file)
+        cfg[i].merge_from_file(f"./configs/trainers/TriTraining/{model_names[i]}.yaml")
         if args.root:
-            cfg[key].DATASET.ROOT = args.root
+            cfg[i].DATASET.ROOT = args.root
         if args.output_dir:
-            cfg[key].OUTPUT_DIR = args.output_dir
+            cfg[i].OUTPUT_DIR = osp.join(args.output_dir, "model_" + str(i))
         if args.model_dir:
-            cfg[key].MODEL_DIR = args.model_dir
+            cfg[i].MODEL_DIR = osp.join(args.model_dir, "model_" + str(i))
         if args.resume:
-            cfg[key].RESUME = args.resume
+            cfg[i].RESUME = args.resume
         if args.seed:
-            cfg[key].SEED = args.seed
+            cfg[i].SEED = args.seed
         if args.source_domains:
-            cfg[key].DATASET.SOURCE_DOMAINS = args.source_domains
+            cfg[i].DATASET.SOURCE_DOMAINS = args.source_domains
         if args.target_domains:
-            cfg[key].DATASET.TARGET_DOMAINS = args.target_domains
+            cfg[i].DATASET.TARGET_DOMAINS = args.target_domains
         if args.transforms:
-            cfg[key].INPUT.TRANSFORMS = args.transforms
+            cfg[i].INPUT.TRANSFORMS = args.transforms
         if args.backbone:
-            cfg[key].MODEL.BACKBONE.NAME = args.backbone
+            cfg[i].MODEL.BACKBONE.NAME = args.backbone
         if args.head:
-            cfg[key].MODEL.HEAD.NAME = args.head
-        cfg[key].merge_from_list(args.opts)
-        cfg[key].freeze()
+            cfg[i].MODEL.HEAD.NAME = args.head
+        cfg[i].merge_from_list(args.opts)
+        cfg[i].freeze()
     return cfg
 
 
@@ -182,24 +178,24 @@ def get_dataset(model):
 
 
 def main(args):
-    model_names = ["PromptSRC", "TCP", "MaPLe"]
+    model_names = ["PromptSRC", "PromptSRC", "PromptSRC"]
     cfg = setup_cfg(args, model_names)
 
-    base_cfg = cfg[model_names[0]]
+    base_cfg = cfg[0]
 
     if base_cfg.SEED >= 0:
         print("Setting fixed seed: {}".format(base_cfg.SEED))
         set_random_seed(base_cfg.SEED)
-    setup_logger(base_cfg.OUTPUT_DIR)
+    setup_logger(args.output_dir)
 
     if torch.cuda.is_available() and base_cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
 
     models = []
     # Build up models
-    for model_name in model_names:
-        print(f"----------Build up {model_name}----------")
-        model = build_trainer(cfg[model_name])
+    for i in range(3):
+        print(f"----------Build up {model_names[i]}----------")
+        model = build_trainer(cfg[i])
         models.append(model)
 
     train_x, train_u, val, test = get_dataset(models[0])
@@ -210,10 +206,7 @@ def main(args):
 
     if args.eval_only:
         for i in range(3):
-            model_name = model_names[i]
-            models[i].custom_load_model(
-                osp.join(cfg[model_name].MODEL_DIR, "model_" + str(i), model_name)
-            )
+            models[i].custom_load_model(osp.join(cfg[i].MODEL_DIR, model_names[i]))
         tri_trainer = Tri_Training(*models)
         y_pred = tri_trainer.predict(test)
         y_pred_each_model = [model.predict(test) for model in models]
@@ -228,6 +221,7 @@ def main(args):
         # 实例化 Tri_Training 并进行训练
         tri_trainer = Tri_Training(*models)
         tri_trainer.fit(train_x, train_u)
+        return
 
 
 if __name__ == "__main__":

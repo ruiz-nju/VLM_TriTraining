@@ -144,7 +144,7 @@ class Tri_Training:
 
         # 保存三个模型
         for i in range(3):
-            self.save_model(self.estimators[i], i)
+            self.save_model(self.estimators[i])
 
         return
 
@@ -162,7 +162,7 @@ class Tri_Training:
         y_pred = pred[0]
         return y_pred
 
-    def save_model(self, estimator, model_index):
+    def save_model(self, estimator):
         names = estimator.get_model_names()
         for name in names:
             model_dict = estimator._models[name].state_dict()
@@ -183,7 +183,6 @@ class Tri_Training:
                 },
                 osp.join(
                     estimator.output_dir,
-                    "model_" + str(model_index),
                     estimator.cfg.TRAINER.NAME,
                     name,
                 ),
