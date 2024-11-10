@@ -43,12 +43,12 @@ from trainers.tri_training import Tri_Training
 import pdb
 
 
-def setup_cfg(args):
+def setup_cfg(args, model_names):
     print("----------Build up cfg----------")
     cfg = {
-        "PromptSRC": get_cfg_default(),
-        "TCP": get_cfg_default(),
-        "MaPLe": get_cfg_default(),
+        model_names[0]: get_cfg_default(),
+        model_names[1]: get_cfg_default(),
+        model_names[2]: get_cfg_default(),
     }
     for key in cfg.keys():
         extend_cfg(cfg[key])
@@ -182,8 +182,10 @@ def get_dataset(model):
 
 
 def main(args):
-    cfg = setup_cfg(args)
-    base_cfg = cfg["PromptSRC"]
+    model_names = ["PromptSRC", "TCP", "MaPLe"]
+    cfg = setup_cfg(args, model_names)
+
+    base_cfg = cfg[model_names[0]]
 
     if base_cfg.SEED >= 0:
         print("Setting fixed seed: {}".format(base_cfg.SEED))
@@ -193,46 +195,38 @@ def main(args):
     if torch.cuda.is_available() and base_cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
 
-    print("----------Build up PromptSRC----------")
-    # print(f"Config of PromptSRC: {cfg['PromptSRC']}")
-    promptsrc = build_trainer(cfg["PromptSRC"])
+    models = []
+    # Build up models
+    for model_name in model_names:
+        print(f"----------Build up {model_name}----------")
+        model = build_trainer(cfg[model_name])
+        models.append(model)
 
-    print("----------Build up TCP----------")
-    # print(f"Config of TCP: {cfg['TCP']}")
-    tcp = build_trainer(cfg["TCP"])
-
-    print("----------Build up MaPLe----------")
-    # print(f"Config of MaPLe: {cfg['MaPLe']}")
-    maple = build_trainer(cfg["MaPLe"])
-
-    train_x, train_u, val, test = get_dataset(promptsrc)
+    train_x, train_u, val, test = get_dataset(models[0])
     test_y = [datum.label for datum in test]
     print(f"train_x size: {len(train_x)}")
     print(f"train_u size: {len(train_u)}")
     print(f"test size: {len(test)}")
 
     if args.eval_only:
-        promptsrc.custom_load_model(osp.join(cfg["PromptSRC"].MODEL_DIR, "PromptSRC"))
-        tcp.custom_load_model(osp.join(cfg["TCP"].MODEL_DIR, "TCP"))
-        maple.custom_load_model(osp.join(cfg["MaPLe"].MODEL_DIR, "MaPLe"))
-        tri_trainer = Tri_Training(tcp, promptsrc, maple)
-        y_src = promptsrc.predict(test)
-        y_tcp = tcp.predict(test)
-        y_maple = maple.predict(test)
+        for i in range(3):
+            model_name = model_names[i]
+            models[i].custom_load_model(
+                osp.join(cfg[model_name].MODEL_DIR, "model_" + str(i), model_name)
+            )
+        tri_trainer = Tri_Training(*models)
         y_pred = tri_trainer.predict(test)
+        y_pred_each_model = [model.predict(test) for model in models]
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
-        acc_src = accuracy_score(test_y, y_src)
-        acc_tcp = accuracy_score(test_y, y_tcp)
-        acc_maple = accuracy_score(test_y, y_maple)
         print(f"Accuracy: {accuracy}")
-        print(f"Accuracy of PromptSRC: {acc_src}")
-        print(f"Accuracy of TCP: {acc_tcp}")
-        print(f"Accuracy of MaPLe: {acc_maple}")
+        acc_each_model = [accuracy_score(test_y, y) for y in y_pred_each_model]
+        for i in range(3):
+            print(f"Accuracy of {model_names[i]}: {acc_each_model[i]}")
         return
     else:
         # 实例化 Tri_Training 并进行训练
-        tri_trainer = Tri_Training(promptsrc, tcp, maple)
+        tri_trainer = Tri_Training(*models)
         tri_trainer.fit(train_x, train_u)
 
 

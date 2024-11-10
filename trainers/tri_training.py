@@ -130,10 +130,10 @@ class Tri_Training:
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
                     print(f"Number of base labels: {num_base_label}")
                     print(f"Number of new labels: {num_new_label}")
-                    self.estimators[i].fit(
-                        train_x, lb_train_u[i], lb_y[i], max_epoch=20
-                    )
-                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=2)
+                    # self.estimators[i].fit(
+                    #     train_x, lb_train_u[i], lb_y[i], max_epoch=20
+                    # )
+                    self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=2)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
@@ -143,8 +143,8 @@ class Tri_Training:
                 improve = False
 
         # 保存三个模型
-        for estimator in self.estimators:
-            self.save_model(estimator)
+        for i in range(3):
+            self.save_model(self.estimators[i], i)
 
         return
 
@@ -162,7 +162,7 @@ class Tri_Training:
         y_pred = pred[0]
         return y_pred
 
-    def save_model(self, estimator):
+    def save_model(self, estimator, model_index):
         names = estimator.get_model_names()
         for name in names:
             model_dict = estimator._models[name].state_dict()
@@ -181,7 +181,12 @@ class Tri_Training:
                     "optimizer": optim_dict,
                     "scheduler": sched_dict,
                 },
-                osp.join(estimator.output_dir, estimator.cfg.TRAINER.NAME, name),
+                osp.join(
+                    estimator.output_dir,
+                    "model_" + str(model_index),
+                    estimator.cfg.TRAINER.NAME,
+                    name,
+                ),
                 model_name="final_model.pth.tar",
                 with_epoch=False,
             )
