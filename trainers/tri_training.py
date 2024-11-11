@@ -130,10 +130,10 @@ class Tri_Training:
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
                     print(f"Number of base labels: {num_base_label}")
                     print(f"Number of new labels: {num_new_label}")
-                    # self.estimators[i].fit(
-                    #     train_x, lb_train_u[i], lb_y[i], max_epoch=20
-                    # )
-                    self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=2)
+                    self.estimators[i].fit(
+                        train_x, lb_train_u[i], lb_y[i], max_epoch=20
+                    )
+                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])

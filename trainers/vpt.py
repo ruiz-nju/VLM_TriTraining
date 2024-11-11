@@ -263,8 +263,6 @@ class VPT(TrainerX):
             self._models[name].load_state_dict(state_dict, strict=False)
 
     def custom_load_model(self, dir):
-        if not osp.exists(dir):
-            raise FileNotFoundError("No pretrained model is given")
 
         names = self.get_model_names()
         model_file = "final_model.pth.tar"

@@ -45,11 +45,13 @@ import pdb
 
 def setup_cfg(args, model_names):
     print("----------Build up cfg----------")
+    prompts = ["a photo of a", "an image of a", "a scene showing a"]
     cfg = [get_cfg_default() for _ in range(3)]
     for i in range(3):
         extend_cfg(cfg[i])
         cfg[i].merge_from_file(args.dataset_config_file)
         cfg[i].merge_from_file(f"./configs/trainers/TriTraining/{model_names[i]}.yaml")
+        cfg[i].TRAINER.PROMPTSRC.CTX_INIT = prompts[i]
         if args.root:
             cfg[i].DATASET.ROOT = args.root
         if args.output_dir:
