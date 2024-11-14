@@ -211,7 +211,7 @@ def main(args):
             models[i].custom_load_model(osp.join(cfg[i].MODEL_DIR, model_names[i]))
         tri_trainer = Tri_Training(*models)
         y_pred = tri_trainer.predict(test)
-        y_pred_each_model = [model.predict(test) for model in models]
+        y_pred_each_model = [np.argmax(model.predict(test), axis=1) for model in models]
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
         print(f"Accuracy: {accuracy}")

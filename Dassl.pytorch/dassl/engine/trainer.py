@@ -741,9 +741,9 @@ class TrainerX(SimpleTrainer):
             for batch_X in tqdm(dataloader):
                 batch_X = batch_X["img"].to(self.device)
                 output = self.model(batch_X)
-                output = output.max(1)[1]
+                output = torch.softmax(output, dim=1)
                 all_outputs.append(output.cpu())
 
         # 将所有 batch 的预测结果拼接成一个完整的 tensor
         all_outputs = torch.cat(all_outputs, dim=0)
-        return all_outputs
+        return all_outputs.numpy()

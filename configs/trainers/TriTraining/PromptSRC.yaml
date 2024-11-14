@@ -45,6 +45,6 @@ TRAINER:
     GPA_MEAN: 30
     GPA_STD: 30
 # # Use the below configuration for: StanfordCars, Flowers102, FGVCAircraft, DTD and EuroSAT
-    # GPA_MEAN: 45
-    # GPA_STD: 5
+#     GPA_MEAN: 45
+#     GPA_STD: 5
   

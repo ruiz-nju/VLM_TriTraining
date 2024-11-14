@@ -4,6 +4,9 @@ import pdb
 from dassl.utils import save_checkpoint
 import os.path as osp
 import math
+from scipy.stats import entropy
+from sklearn.metrics import confusion_matrix
+import pandas as pd
 
 
 class Tri_Training:
@@ -16,8 +19,8 @@ class Tri_Training:
         print(f"Measuring error between model {j} and model {k}")
         y = [datum.label for datum in datums]
         # 获取模型 j 和 k 的预测结果
-        j_pred = self.estimators[j].predict(datums)
-        k_pred = self.estimators[k].predict(datums)
+        j_pred = np.argmax(self.estimators[j].predict(datums), axis=1)
+        k_pred = np.argmax(self.estimators[k].predict(datums), axis=1)
 
         # 打印模型 j 和模型 k 的前 10 个预测结果，方便调试
         print(f"Number of predictions: {len(y)}")
@@ -88,22 +91,55 @@ class Tri_Training:
 
                 # 如果新的错误率小于先前的错误率，尝试用未标记数据更新 i
                 if e[i] < e_prime[i]:
+                    confidence_boound = 0.7
                     print(f"----------------{j} is predicting----------------")
                     # 使用未标记数据让模型 j 进行预测
-                    ulb_y_j = self.estimators[j].predict(train_u)
+                    j_logits = self.estimators[j].predict(train_u)
+                    j_confidence = self.calculate_confidence(j_logits)
+                    # 置信度低的样本使用 -1 标记
+                    ulb_y_j = np.where(
+                        j_confidence > confidence_boound,
+                        np.argmax(j_logits, axis=1),
+                        -1,
+                    )
+                    # ulb_y_j = self.estimators[j].predict(train_u)
                     print(f"----------------{k} is predicting----------------")
                     # 使用未标记数据让模型 k 进行预测
-                    ulb_y_k = self.estimators[k].predict(train_u)
+                    k_logits = self.estimators[k].predict(train_u)
+                    k_confidence = self.calculate_confidence(k_logits)
+                    ulb_y_k = np.where(
+                        k_confidence > confidence_boound,
+                        np.argmax(k_logits, axis=1),
+                        -1,
+                    )
+                    # ulb_y_k = self.estimators[k].predict(train_u)
 
-                    # 获取 j 和 k 预测一致的未标记样本，并将它们作为模型 i 的新标记样本
-                    mask = (ulb_y_j == ulb_y_k).tolist()
+                    # 获取 j 和 k 预测一致且均不为 - 1 的未标记样本，并将它们作为模型 i 的新标记样本
+                    consistent_mask = (ulb_y_j == ulb_y_k) & (ulb_y_j != -1)
                     lb_train_u[i] = [
-                        train_u[idx] for idx, is_true in enumerate(mask) if is_true
+                        train_u[idx]
+                        for idx, is_true in enumerate(consistent_mask)
+                        if is_true
                     ]
                     lb_y[i] = [
-                        ulb_y_j[idx] for idx, is_true in enumerate(mask) if is_true
+                        ulb_y_j[idx]
+                        for idx, is_true in enumerate(consistent_mask)
+                        if is_true
                     ]
 
+                    ############
+                    # 查看伪标签的精准度
+                    num_pseudo_base = sum(1 for lb in lb_y[i] if lb < min_new_label)
+                    num_pseudo_new = sum(1 for lb in lb_y[i] if lb >= min_new_label)
+                    real_labels = [datum._real_label for datum in lb_train_u[i]]
+                    contrast = np.array(real_labels) == np.array(lb_y[i])
+                    print(
+                        f"基类伪标注的精确度: {sum(1 for t in range(len(contrast)) if contrast[t] and lb_y[i][t] < min_new_label) / num_pseudo_base}"
+                    )
+                    print(
+                        f"新类伪标注的精确度: {sum(1 for t in range(len(contrast)) if contrast[t] and lb_y[i][t] >= min_new_label) / num_pseudo_new}"
+                    )
+                    #############
                     # 更新 l_prime 为所需标记样本的数量
                     if l_prime[i] == 0:
                         l_prime[i] = int(e[i] / (e_prime[i] - e[i]) + 1)
@@ -128,8 +164,8 @@ class Tri_Training:
                     print(f"Add {len(lb_y[i])} new labeled samples to model {i}")
                     num_base_label = sum(1 for lb in lb_y[i] if lb < min_new_label)
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
-                    print(f"Number of base labels: {num_base_label}")
-                    print(f"Number of new labels: {num_new_label}")
+                    print(f"划分到基类中的样本数量: {num_base_label}")
+                    print(f"划分到新类中的样本数量: {num_new_label}")
                     self.estimators[i].fit(
                         train_x, lb_train_u[i], lb_y[i], max_epoch=20
                     )
@@ -152,7 +188,9 @@ class Tri_Training:
         # 预测新数据集 X，返回预测结果
         print(f"Tritraining is predicting {len(datums)} samples")
         # 对三个模型分别进行预测，结果转换为 NumPy 数组
-        output = [self.estimators[i].predict(datums).cpu().numpy() for i in range(3)]
+        output = [
+            np.argmax(self.estimators[i].predict(datums), axis=1) for i in range(3)
+        ]
         pred = np.asarray(output)
 
         # 如果模型 1 和 2 的预测一致，则以它们的预测结果为准
@@ -189,3 +227,10 @@ class Tri_Training:
                 model_name="final_model.pth.tar",
                 with_epoch=False,
             )
+
+    def calculate_confidence(self, logits):
+        """
+        logits.shape: (num_samples, num_classes)
+        """
+        confidence = 1 - entropy(logits, axis=1) / np.log(logits.shape[1])
+        return confidence
