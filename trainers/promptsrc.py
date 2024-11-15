@@ -209,9 +209,9 @@ class CustomCLIP(nn.Module):
         prompts = self.prompt_learner()
         # Compute the prompted image and text features
         text_features = self.text_encoder(prompts, tokenized_prompts)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         image_features = self.image_encoder(image.type(self.dtype))
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         # Compute the prompted logits
         logits = logit_scale * image_features @ text_features.t()
         if self.prompt_learner.training:
@@ -340,6 +340,7 @@ class PromptSRC(TrainerX):
                 zero_shot_logits,
                 logits,
             ) = model(image, label)
+
             # Calculate the L_SCL_text loss
             loss_scl_text = (
                 F.l1_loss(
@@ -498,6 +499,7 @@ class PromptSRC(TrainerX):
         if custom_max_epoch is not None:
             self.max_epoch = custom_max_epoch
             self.total_epochs = custom_max_epoch
+            self.model.total_epochs = custom_max_epoch
             N = custom_max_epoch
             mean = self.cfg.TRAINER.PROMPTSRC.GPA_MEAN
             stdev = self.cfg.TRAINER.PROMPTSRC.GPA_STD

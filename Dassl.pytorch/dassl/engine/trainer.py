@@ -747,3 +747,37 @@ class TrainerX(SimpleTrainer):
         # 将所有 batch 的预测结果拼接成一个完整的 tensor
         all_outputs = torch.cat(all_outputs, dim=0)
         return all_outputs.numpy()
+
+    def custom_save_model(self):
+        names = self.get_model_names()
+        for name in names:
+            model_dict = self._models[name].state_dict()
+
+            optim_dict = None
+            if self._optims[name] is not None:
+                optim_dict = self._optims[name].state_dict()
+
+            sched_dict = None
+            if self._scheds[name] is not None:
+                sched_dict = self._scheds[name].state_dict()
+
+            save_checkpoint(
+                {
+                    "state_dict": model_dict,
+                    "optimizer": optim_dict,
+                    "scheduler": sched_dict,
+                },
+                osp.join(
+                    self.output_dir,
+                    self.cfg.TRAINER.NAME,
+                    name,
+                ),
+                model_name="final_model.pth.tar",
+                with_epoch=False,
+            )
+
+    def custom_load_model(self, dir):
+        pass
+
+    def reset_training_status(self, custom_max_epoch=None):
+        pass

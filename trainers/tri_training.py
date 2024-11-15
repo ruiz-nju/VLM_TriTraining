@@ -52,9 +52,6 @@ class Tri_Training:
         return error_rate
 
     def fit(self, train_x, train_u):
-        # print(len(train_x), len(train_u)) # 800 800
-        # print(train_x[0]) # <dassl.data.datasets.base_dataset.Datum object at 0x75ecd4b667c0>
-        # print(train_u[0]) # <dassl.data.datasets.base_dataset.Datum object at 0x75ecd4cb35e0>
         num_classes = max(datum._real_label for datum in train_u) + 1
         min_new_label = math.ceil(num_classes / 2)
         # 初始化每个分类器的训练，使用带放回抽样生成新的训练集
@@ -91,28 +88,41 @@ class Tri_Training:
 
                 # 如果新的错误率小于先前的错误率，尝试用未标记数据更新 i
                 if e[i] < e_prime[i]:
-                    confidence_boound = 0.7
+                    base_confidence_bound = 0.99
+                    new_confidence_bound = 0.99
                     print(f"----------------{j} is predicting----------------")
                     # 使用未标记数据让模型 j 进行预测
                     j_logits = self.estimators[j].predict(train_u)
                     j_confidence = self.calculate_confidence(j_logits)
                     # 置信度低的样本使用 -1 标记
                     ulb_y_j = np.where(
-                        j_confidence > confidence_boound,
+                        (
+                            (j_confidence > base_confidence_bound)
+                            & (np.argmax(j_logits, axis=1) < min_new_label)
+                        )
+                        | (
+                            (j_confidence > new_confidence_bound)
+                            & (np.argmax(j_logits, axis=1) >= min_new_label)
+                        ),
                         np.argmax(j_logits, axis=1),
                         -1,
                     )
-                    # ulb_y_j = self.estimators[j].predict(train_u)
                     print(f"----------------{k} is predicting----------------")
                     # 使用未标记数据让模型 k 进行预测
                     k_logits = self.estimators[k].predict(train_u)
                     k_confidence = self.calculate_confidence(k_logits)
                     ulb_y_k = np.where(
-                        k_confidence > confidence_boound,
+                        (
+                            (k_confidence > base_confidence_bound)
+                            & (np.argmax(k_logits, axis=1) < min_new_label)
+                        )
+                        | (
+                            (k_confidence > new_confidence_bound)
+                            & (np.argmax(k_logits, axis=1) >= min_new_label)
+                        ),
                         np.argmax(k_logits, axis=1),
                         -1,
                     )
-                    # ulb_y_k = self.estimators[k].predict(train_u)
 
                     # 获取 j 和 k 预测一致且均不为 - 1 的未标记样本，并将它们作为模型 i 的新标记样本
                     consistent_mask = (ulb_y_j == ulb_y_k) & (ulb_y_j != -1)
@@ -166,10 +176,10 @@ class Tri_Training:
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
                     print(f"划分到基类中的样本数量: {num_base_label}")
                     print(f"划分到新类中的样本数量: {num_new_label}")
-                    self.estimators[i].fit(
-                        train_x, lb_train_u[i], lb_y[i], max_epoch=20
-                    )
-                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
+                    # self.estimators[i].fit(
+                    #     train_x, lb_train_u[i], lb_y[i], max_epoch=20
+                    # )
+                    self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
@@ -179,8 +189,8 @@ class Tri_Training:
                 improve = False
 
         # 保存三个模型
-        for i in range(3):
-            self.save_model(self.estimators[i])
+        for estimator in self.estimators:
+            estimator.custom_save_model()
 
         return
 
@@ -198,35 +208,7 @@ class Tri_Training:
 
         # 返回最终的预测结果
         y_pred = pred[0]
-        return y_pred
-
-    def save_model(self, estimator):
-        names = estimator.get_model_names()
-        for name in names:
-            model_dict = estimator._models[name].state_dict()
-
-            optim_dict = None
-            if estimator._optims[name] is not None:
-                optim_dict = estimator._optims[name].state_dict()
-
-            sched_dict = None
-            if estimator._scheds[name] is not None:
-                sched_dict = estimator._scheds[name].state_dict()
-
-            save_checkpoint(
-                {
-                    "state_dict": model_dict,
-                    "optimizer": optim_dict,
-                    "scheduler": sched_dict,
-                },
-                osp.join(
-                    estimator.output_dir,
-                    estimator.cfg.TRAINER.NAME,
-                    name,
-                ),
-                model_name="final_model.pth.tar",
-                with_epoch=False,
-            )
+        return y_pred, output
 
     def calculate_confidence(self, logits):
         """
