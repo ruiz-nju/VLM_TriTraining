@@ -640,12 +640,6 @@ class TrainerX(SimpleTrainer):
 
     # 下面全是为 TriTraining 自定义的函数
 
-    def reset_training_status(self, custom_max_epoch=None):
-        """
-        重置模型训练的状态
-        """
-        pass
-
     # 自定义数据的 fit
     def fit(
         self, labeled_datums, unlabeled_datums=None, pseudo_labels=None, max_epoch=None

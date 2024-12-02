@@ -71,16 +71,16 @@ def parse(dataset: str):
 
 def main():
     datasets = [
+        "dtd",
+        "eurosat",
         "stanford_cars",
         "oxford_flowers",
         "fgvc_aircraft",
-        "dtd",
-        "eurosat",
-        # "caltech101",
+        "caltech101",
         "food101",
         "oxford_pets",
         # "sun397",
-        # "ucf101",
+        "ucf101",
     ]
 
     total_result = [0.0, 0.0, 0.0]  # 用于累加所有数据集的结果
