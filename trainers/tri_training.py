@@ -73,6 +73,7 @@ class Tri_Training:
         improve = True
         iter = 0
 
+        # 现在只迭代一个轮次，因为之前测试迭代两个轮次后性能反而下降了
         while improve and iter < 1:
             iter += 1
             print("iteration:", iter)
@@ -86,10 +87,9 @@ class Tri_Training:
                 # 计算模型 j 和 k 的相对错误率
                 e[i] = self.measure_error(train_x, j, k)
 
-                # 如果新的错误率小于先前的错误率，尝试用未标记数据更新 i
                 if e[i] < e_prime[i]:
-                    base_confidence_bound = 0.99
-                    new_confidence_bound = 0.99
+                    base_confidence_bound = 0.9
+                    new_confidence_bound = 0.7
                     print(f"----------------{j} is predicting----------------")
                     # 使用未标记数据让模型 j 进行预测
                     j_logits = self.estimators[j].predict(train_u)
@@ -176,10 +176,10 @@ class Tri_Training:
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
                     print(f"划分到基类中的样本数量: {num_base_label}")
                     print(f"划分到新类中的样本数量: {num_new_label}")
-                    # self.estimators[i].fit(
-                    #     train_x, lb_train_u[i], lb_y[i], max_epoch=20
-                    # )
-                    self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
+                    self.estimators[i].fit(
+                        train_x, lb_train_u[i], lb_y[i], max_epoch=25
+                    )
+                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
