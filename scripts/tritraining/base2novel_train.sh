@@ -7,7 +7,7 @@ UNLABELED_SHOTS=$3
 SEED=$4
 DEVICE=$5
 
-# sh scripts/tritraining/base2novel_train.sh caltech101 16 0 1
+# sh scripts/tritraining/base2novel_train.sh caltech101 16 0 1 0
 DIR=output/${TRAINER}/base2novel_train/${DATASET}/shots_${SHOTS}/unlabeled_shots_${UNLABELED_SHOTS}/seed_${SEED}
 CUDA_VISIBLE_DEVICES=$DEVICE python tritraining_main.py \
     --root ${DATA} \

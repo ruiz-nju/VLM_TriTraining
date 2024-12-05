@@ -742,7 +742,7 @@ class TrainerX(SimpleTrainer):
         all_outputs = torch.cat(all_outputs, dim=0)
         return all_outputs.numpy()
 
-    def custom_save_model(self):
+    def custom_save_model(self, temp_dir=None):
         names = self.get_model_names()
         for name in names:
             model_dict = self._models[name].state_dict()
@@ -755,6 +755,11 @@ class TrainerX(SimpleTrainer):
             if self._scheds[name] is not None:
                 sched_dict = self._scheds[name].state_dict()
 
+            output_dir = (
+                self.output_dir
+                if temp_dir is None
+                else osp.join(temp_dir, self.output_dir)
+            )
             save_checkpoint(
                 {
                     "state_dict": model_dict,
@@ -762,7 +767,7 @@ class TrainerX(SimpleTrainer):
                     "scheduler": sched_dict,
                 },
                 osp.join(
-                    self.output_dir,
+                    output_dir,
                     self.cfg.TRAINER.NAME,
                     name,
                 ),

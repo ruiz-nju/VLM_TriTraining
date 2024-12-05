@@ -25,13 +25,16 @@ def read_result(file: str):
 
 
 def parse(dataset: str):
+    dir_name = "output_50epoch_30epoch"
     base_dir = osp.join(
-        "output/TriTraining/base2novel_test_base",
+        dir_name,
+        "TriTraining/base2novel_test_base",
         dataset,
         "shots_16/unlabeled_shots_0",
     )
     new_dir = osp.join(
-        "output/TriTraining/base2novel_test_new",
+        dir_name,
+        "TriTraining/base2novel_test_new",
         dataset,
         "shots_16/unlabeled_shots_0",
     )
@@ -73,13 +76,13 @@ def main():
     datasets = [
         "dtd",
         "eurosat",
-        "stanford_cars",
-        "oxford_flowers",
         "fgvc_aircraft",
+        "oxford_flowers",
+        "stanford_cars",
         "caltech101",
         "food101",
         "oxford_pets",
-        # "sun397",
+        "sun397",
         "ucf101",
     ]
 

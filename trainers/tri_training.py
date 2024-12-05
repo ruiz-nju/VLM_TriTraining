@@ -55,10 +55,18 @@ class Tri_Training:
         num_classes = max(datum._real_label for datum in train_u) + 1
         min_new_label = math.ceil(num_classes / 2)
         # 初始化每个分类器的训练，使用带放回抽样生成新的训练集
-        for i in range(3):
+        for i, model in enumerate(self.estimators):
             sub_train_x = sklearn.utils.resample(train_x)
             print(f"------------Tritraining is fitting estimator: {i}------------")
-            self.estimators[i].fit(sub_train_x)
+            # model.fit(sub_train_x)
+            # # 保存模型
+            # model.custom_save_model(temp_dir="pretraining_50epoch")
+            load_dir = osp.join(
+                "pretraining_50epoch",
+                model.cfg.OUTPUT_DIR,
+                model.cfg.TRAINER.NAME,
+            )
+            model.custom_load_model(load_dir)
 
         # e_prime: 用于存储每个模型的初始错误率，初始化为 0.5
         e_prime = [0.5] * 3
@@ -179,7 +187,6 @@ class Tri_Training:
                     self.estimators[i].fit(
                         train_x, lb_train_u[i], lb_y[i], max_epoch=25
                     )
-                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])

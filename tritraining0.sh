@@ -1,7 +1,7 @@
 #!/bin/bash
 DEVICE=0
 # eurosat dtd  
-for dataset in stanford_cars  
+for dataset in oxford_flowers 
 do 
     for seed in 1 2 3
     do 
