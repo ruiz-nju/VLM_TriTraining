@@ -130,4 +130,5 @@ dmypy.json
 
 # Custom
 output*/
+pretraining_50epoch/
 debug.sh

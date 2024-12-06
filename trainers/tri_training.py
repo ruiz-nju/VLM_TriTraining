@@ -82,12 +82,17 @@ class Tri_Training:
         iter = 0
 
         # 现在只迭代一个轮次，因为之前测试迭代两个轮次后性能反而下降了
-        while improve and iter < 1:
+        # while improve and iter < 1:
+        while improve:
             iter += 1
             print("iteration:", iter)
+            print(f"e_prime: {e_prime}")
+            print(f"l_prime: {l_prime}")
+            print(f"e: {e}")
 
             # 对每个模型 i 进行错误率计算并决定是否更新
             for i in range(3):
+                print(f"----------------判断模型 {i} 是否需要更新----------------")
                 # j 和 k 是除 i 以外的两个模型
                 j, k = np.delete(np.array([0, 1, 2]), i)
                 update[i] = False
@@ -98,39 +103,41 @@ class Tri_Training:
                 if e[i] < e_prime[i]:
                     base_confidence_bound = 0.9
                     new_confidence_bound = 0.7
-                    print(f"----------------{j} is predicting----------------")
+                    print(f"模型 {j} 预测中")
                     # 使用未标记数据让模型 j 进行预测
                     j_logits = self.estimators[j].predict(train_u)
-                    j_confidence = self.calculate_confidence(j_logits)
-                    # 置信度低的样本使用 -1 标记
-                    ulb_y_j = np.where(
-                        (
-                            (j_confidence > base_confidence_bound)
-                            & (np.argmax(j_logits, axis=1) < min_new_label)
-                        )
-                        | (
-                            (j_confidence > new_confidence_bound)
-                            & (np.argmax(j_logits, axis=1) >= min_new_label)
-                        ),
-                        np.argmax(j_logits, axis=1),
-                        -1,
-                    )
-                    print(f"----------------{k} is predicting----------------")
+                    ulb_y_j = np.argmax(j_logits, axis=1)
+                    # j_confidence = self.calculate_confidence(j_logits)
+                    # # 置信度低的样本使用 -1 标记
+                    # ulb_y_j = np.where(
+                    #     (
+                    #         (j_confidence > base_confidence_bound)
+                    #         & (np.argmax(j_logits, axis=1) < min_new_label)
+                    #     )
+                    #     | (
+                    #         (j_confidence > new_confidence_bound)
+                    #         & (np.argmax(j_logits, axis=1) >= min_new_label)
+                    #     ),
+                    #     np.argmax(j_logits, axis=1),
+                    #     -1,
+                    # )
+                    print(f"模型 {k} 预测中")
                     # 使用未标记数据让模型 k 进行预测
                     k_logits = self.estimators[k].predict(train_u)
-                    k_confidence = self.calculate_confidence(k_logits)
-                    ulb_y_k = np.where(
-                        (
-                            (k_confidence > base_confidence_bound)
-                            & (np.argmax(k_logits, axis=1) < min_new_label)
-                        )
-                        | (
-                            (k_confidence > new_confidence_bound)
-                            & (np.argmax(k_logits, axis=1) >= min_new_label)
-                        ),
-                        np.argmax(k_logits, axis=1),
-                        -1,
-                    )
+                    ulb_y_k = np.argmax(k_logits, axis=1)
+                    # k_confidence = self.calculate_confidence(k_logits)
+                    # ulb_y_k = np.where(
+                    #     (
+                    #         (k_confidence > base_confidence_bound)
+                    #         & (np.argmax(k_logits, axis=1) < min_new_label)
+                    #     )
+                    #     | (
+                    #         (k_confidence > new_confidence_bound)
+                    #         & (np.argmax(k_logits, axis=1) >= min_new_label)
+                    #     ),
+                    #     np.argmax(k_logits, axis=1),
+                    #     -1,
+                    # )
 
                     # 获取 j 和 k 预测一致且均不为 - 1 的未标记样本，并将它们作为模型 i 的新标记样本
                     consistent_mask = (ulb_y_j == ulb_y_k) & (ulb_y_j != -1)
@@ -158,18 +165,35 @@ class Tri_Training:
                         f"新类伪标注的精确度: {sum(1 for t in range(len(contrast)) if contrast[t] and lb_y[i][t] >= min_new_label) / num_pseudo_new}"
                     )
                     #############
-                    # 更新 l_prime 为所需标记样本的数量
+
                     if l_prime[i] == 0:
                         l_prime[i] = int(e[i] / (e_prime[i] - e[i]) + 1)
 
-                    # 如果满足更新条件，则更新标记数据集
+                    print(f"e_prime: {e_prime}")
+                    print(f"l_prime: {l_prime}")
+                    print(f"e: {e}")
+
+                    print(f"该轮伪标注数量: {len(lb_y[i])}")
+                    print(f"前轮伪标注数量: {l_prime[i]}")
+                    # 该轮的伪标注数量大于前一轮的伪标注数量
                     if l_prime[i] < len(lb_y[i]):
+                        print(f"该轮伪标注数量增加")
+                        print(f"该轮估计的错误样本数量: {e[i] * len(lb_y[i])}")
+                        print(f"前轮估计的错误样本数量: {e_prime[i] * l_prime[i]}")
                         # 错误样本数量减少即为满足更新条件
                         if e[i] * len(lb_y[i]) < e_prime[i] * l_prime[i]:
+                            print(f"错误样本数量减少，更新模型 {i}")
                             update[i] = True
+                        # 错误样本数量增加，但增加的数量不多
                         elif l_prime[i] > e[i] / (e_prime[i] - e[i]):
+                            print(
+                                f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] / (e_prime[i] - e[i])}, 更新模型 {i}"
+                            )
                             # 随机选择部分样本来更新模型
-                            lb_index = np.random.choice(len(lb_y[i]), len(lb_y[i]) // 2)
+                            # lb_index = np.random.choice(len(lb_y[i]), len(lb_y[i]) // 2)
+                            lb_index = np.random.choice(
+                                len(lb_y[i]), int(e_prime[i] * l_prime[i] / e[i] - 1)
+                            )
                             lb_train_u[i] = [lb_train_u[i][idx] for idx in lb_index]
                             lb_y[i] = [lb_y[i][idx] for idx in lb_index]
                             update[i] = True
@@ -177,9 +201,9 @@ class Tri_Training:
             # 更新每个模型（如果需要）
             for i in range(3):
                 if update[i]:
-                    print(f"----------------{i} is being updated----------------")
+                    print(f"----------------模型 {i} 正在被更新----------------")
                     # 将标记数据集与新标记的未标记样本合并，并重新训练模型
-                    print(f"Add {len(lb_y[i])} new labeled samples to model {i}")
+                    print(f"为模型 {i} 添加了 {len(lb_y[i])} 个新标记样本")
                     num_base_label = sum(1 for lb in lb_y[i] if lb < min_new_label)
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
                     print(f"划分到基类中的样本数量: {num_base_label}")
@@ -194,6 +218,7 @@ class Tri_Training:
             # 如果没有任何模型更新，结束循环
             if update == [False] * 3:
                 improve = False
+                print(f"TriTraining 阶段共迭代 {iter - 1} 个轮次")
 
         # 保存三个模型
         for estimator in self.estimators:
