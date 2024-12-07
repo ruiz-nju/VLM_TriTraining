@@ -25,7 +25,7 @@ def read_result(file: str):
 
 
 def parse(dataset: str):
-    dir_name = "output_50epoch_30epoch"
+    dir_name = "output_50epoch_25epoch"
     base_dir = osp.join(
         dir_name,
         "TriTraining/base2novel_test_base",
@@ -82,8 +82,8 @@ def main():
         "caltech101",
         "food101",
         "oxford_pets",
-        "sun397",
-        "ucf101",
+        # "sun397",
+        # "ucf101",
     ]
 
     total_result = [0.0, 0.0, 0.0]  # 用于累加所有数据集的结果

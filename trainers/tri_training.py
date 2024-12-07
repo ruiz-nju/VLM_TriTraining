@@ -60,13 +60,14 @@ class Tri_Training:
             print(f"------------Tritraining is fitting estimator: {i}------------")
             # model.fit(sub_train_x)
             # # 保存模型
-            # model.custom_save_model(temp_dir="pretraining_50epoch")
-            load_dir = osp.join(
-                "pretraining_50epoch",
-                model.cfg.OUTPUT_DIR,
-                model.cfg.TRAINER.NAME,
+            # model.custom_save_model(parent_dir="pretraining_50epoch")
+            model.custom_load_model(
+                osp.join(
+                    "pretraining_50epoch",
+                    model.cfg.OUTPUT_DIR,
+                    model.cfg.TRAINER.NAME,
+                )
             )
-            model.custom_load_model(load_dir)
 
         # e_prime: 用于存储每个模型的初始错误率，初始化为 0.5
         e_prime = [0.5] * 3
@@ -173,8 +174,8 @@ class Tri_Training:
                     print(f"l_prime: {l_prime}")
                     print(f"e: {e}")
 
-                    print(f"该轮伪标注数量: {len(lb_y[i])}")
-                    print(f"前轮伪标注数量: {l_prime[i]}")
+                    print(f"该轮可用伪标注数量: {len(lb_y[i])}")
+                    print(f"前轮实际使用的伪标注数量: {l_prime[i]}")
                     # 该轮的伪标注数量大于前一轮的伪标注数量
                     if l_prime[i] < len(lb_y[i]):
                         print(f"该轮伪标注数量增加")
@@ -214,6 +215,9 @@ class Tri_Training:
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
+                # 保存模型
+                parent_dir = osp.join("diffenrent_tritraining_iter", f"iter_{iter}")
+                self.estimators[i].custom_save_model(parent_dir=parent_dir)
 
             # 如果没有任何模型更新，结束循环
             if update == [False] * 3:
