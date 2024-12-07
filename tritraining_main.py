@@ -210,7 +210,7 @@ def main(args):
         load_dirs = [osp.join(cfg[i].MODEL_DIR, model_names[i]) for i in range(3)]
         # load_dirs = [
         #     osp.join(
-        #         "diffenrent_tritraining_iter",
+        #         "output_different_tritraining_iter",
         #         "iter_16",
         #         cfg[i].MODEL_DIR,
         #         model_names[i],

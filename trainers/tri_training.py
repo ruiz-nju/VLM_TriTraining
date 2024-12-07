@@ -58,16 +58,16 @@ class Tri_Training:
         for i, model in enumerate(self.estimators):
             sub_train_x = sklearn.utils.resample(train_x)
             print(f"------------Tritraining is fitting estimator: {i}------------")
-            # model.fit(sub_train_x)
-            # # 保存模型
-            # model.custom_save_model(parent_dir="pretraining_50epoch")
-            model.custom_load_model(
-                osp.join(
-                    "pretraining_50epoch",
-                    model.cfg.OUTPUT_DIR,
-                    model.cfg.TRAINER.NAME,
-                )
-            )
+            model.fit(sub_train_x)
+            # 保存模型
+            model.custom_save_model(parent_dir="pretraining_50epoch")
+            # model.custom_load_model(
+            #     osp.join(
+            #         "pretraining_50epoch",
+            #         model.cfg.OUTPUT_DIR,
+            #         model.cfg.TRAINER.NAME,
+            #     )
+            # )
 
         # e_prime: 用于存储每个模型的初始错误率，初始化为 0.5
         e_prime = [0.5] * 3
@@ -210,14 +210,18 @@ class Tri_Training:
                     print(f"划分到基类中的样本数量: {num_base_label}")
                     print(f"划分到新类中的样本数量: {num_new_label}")
                     self.estimators[i].fit(
-                        train_x, lb_train_u[i], lb_y[i], max_epoch=25
+                        train_x, lb_train_u[i], lb_y[i], max_epoch=5
                     )
+                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
                 # 保存模型
-                parent_dir = osp.join("diffenrent_tritraining_iter", f"iter_{iter}")
-                self.estimators[i].custom_save_model(parent_dir=parent_dir)
+                if iter % 5 == 0:
+                    parent_dir = osp.join(
+                        "output_different_tritraining_iter", f"iter_{iter}"
+                    )
+                    self.estimators[i].custom_save_model(parent_dir=parent_dir)
 
             # 如果没有任何模型更新，结束循环
             if update == [False] * 3:
