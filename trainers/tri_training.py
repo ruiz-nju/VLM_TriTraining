@@ -22,10 +22,9 @@ class Tri_Training:
         j_pred = np.argmax(self.estimators[j].predict(datums), axis=1)
         k_pred = np.argmax(self.estimators[k].predict(datums), axis=1)
 
-        # 打印模型 j 和模型 k 的前 10 个预测结果，方便调试
         print(f"Number of predictions: {len(y)}")
 
-        # 获取两个模型都预测错误的样本的 index
+        # 获取两个模型预测相同且都预测错误的样本的 index
         wrong_index = np.logical_and(j_pred != y, k_pred == j_pred)
 
         print(
@@ -58,16 +57,21 @@ class Tri_Training:
         for i, model in enumerate(self.estimators):
             sub_train_x = sklearn.utils.resample(train_x)
             print(f"------------Tritraining is fitting estimator: {i}------------")
-            # model.fit(sub_train_x)
-            # # 保存模型
-            # model.custom_save_model(parent_dir="pretraining_50epoch")
-            model.custom_load_model(
-                osp.join(
-                    "pretraining_50epoch",
-                    model.cfg.OUTPUT_DIR,
-                    model.cfg.TRAINER.NAME,
-                )
+            warm_up_epochs = 5
+            # 检查是否已经训练过模型
+            model_dir = osp.join(
+                f"pretraining_{warm_up_epochs}epoch",
+                model.cfg.OUTPUT_DIR,
+                model.cfg.TRAINER.NAME,
             )
+            if osp.exists(model_dir):
+                print(f"Loading pre-trained model from {model_dir}")
+                model.custom_load_model(model_dir)
+            else:
+                print(f"Training model {i} for {warm_up_epochs} epochs")
+                model.fit(sub_train_x, max_epoch=warm_up_epochs)
+                # 保存模型
+                model.custom_save_model(parent_dir=f"pretraining_{warm_up_epochs}epoch")
 
         # e_prime: 用于存储每个模型的初始错误率，初始化为 0.5
         e_prime = [0.5] * 3
@@ -86,7 +90,7 @@ class Tri_Training:
         # while improve and iter < 1:
         while improve:
             iter += 1
-            print("iteration:", iter)
+            print(f"------------------------iteration: {iter}------------------------")
             print(f"e_prime: {e_prime}")
             print(f"l_prime: {l_prime}")
             print(f"e: {e}")
@@ -187,7 +191,7 @@ class Tri_Training:
                             update[i] = True
                         # 错误样本数量增加，但增加的数量不多
                         elif l_prime[i] > e[i] / (e_prime[i] - e[i]):
-                            print(
+                            print( 
                                 f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] / (e_prime[i] - e[i])}, 更新模型 {i}"
                             )
                             # 随机选择部分样本来更新模型
@@ -210,14 +214,14 @@ class Tri_Training:
                     print(f"划分到基类中的样本数量: {num_base_label}")
                     print(f"划分到新类中的样本数量: {num_new_label}")
                     self.estimators[i].fit(
-                        train_x, lb_train_u[i], lb_y[i], max_epoch=25
+                        train_x, lb_train_u[i], lb_y[i], max_epoch=20
                     )
+                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])
-                # 保存模型
-                parent_dir = osp.join("diffenrent_tritraining_iter", f"iter_{iter}")
-                self.estimators[i].custom_save_model(parent_dir=parent_dir)
+                else:
+                    print(f"----------------模型 {i} 无需被更新----------------")
 
             # 如果没有任何模型更新，结束循环
             if update == [False] * 3:

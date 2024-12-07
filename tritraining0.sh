@@ -1,7 +1,7 @@
 #!/bin/bash
 DEVICE=0
-# eurosat dtd  
-for dataset in caltech101 
+# Flowers102, FGVCAircraft, DTD and EuroSAT
+for dataset in oxford_flowers
 do 
     for seed in 1
     do 

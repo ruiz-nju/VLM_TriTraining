@@ -645,13 +645,14 @@ class TrainerX(SimpleTrainer):
         self, labeled_datums, unlabeled_datums=None, pseudo_labels=None, max_epoch=None
     ):
         self.reset_training_status(custom_max_epoch=max_epoch)
+        print(f"len(labeled_datums): {len(labeled_datums)}")
         train_dataset = labeled_datums
 
         if unlabeled_datums is not None:
             for datum, pseudo_label in zip(unlabeled_datums, pseudo_labels):
                 datum.bound_pseudo_label(pseudo_label.item())
 
-            train_dataset += unlabeled_datums
+            train_dataset = train_dataset + unlabeled_datums
         self.before_train()
         cfg = self.cfg
         dataloader = build_data_loader(
@@ -664,6 +665,9 @@ class TrainerX(SimpleTrainer):
             tfm=self.dm.tfm_train,
             is_train=True,
         )
+        print(f"len(train_dataset): {len(train_dataset)}")
+        print(f"len(train_dataset) / 4: {len(train_dataset)/4}")
+        print(f"len(dataloader): {len(dataloader)}")
 
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()
