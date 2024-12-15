@@ -132,3 +132,8 @@ dmypy.json
 output*/
 pretraining_50epoch/
 debug.sh
+
+tritraining0.sh
+tritraining1.sh
+tritraining2.sh
+tritraining3.sh

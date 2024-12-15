@@ -1,7 +1,7 @@
 #!/bin/bash
 DEVICE=0
 # Flowers102, FGVCAircraft, DTD and EuroSAT
-for dataset in oxford_flowers
+for dataset in oxford_flowers dtd
 do 
     for seed in 1
     do 

@@ -7,12 +7,19 @@ import math
 from scipy.stats import entropy
 from sklearn.metrics import confusion_matrix
 import pandas as pd
+from torchvision.transforms import (
+    Resize, Compose, ToTensor, Normalize, CenterCrop, RandomCrop, ColorJitter,
+    RandomApply, GaussianBlur, RandomGrayscale, RandomResizedCrop,
+    RandomHorizontalFlip
+)
+from torchvision.transforms.functional import InterpolationMode
 
 
 class Tri_Training:
     def __init__(self, base_estimator_1, base_estimator_2, base_estimator_3):
         # 初始化函数，接受三个基本分类器
         self.estimators = [base_estimator_1, base_estimator_2, base_estimator_3]
+        self.weak_augamentation, self.strong_augamentation = self.build_transform()
 
     def measure_error(self, datums, j, k):
         # 计算模型 j 和模型 k 之间的错误率
@@ -106,56 +113,18 @@ class Tri_Training:
                 e[i] = self.measure_error(train_x, j, k)
 
                 if e[i] < e_prime[i]:
-                    base_confidence_bound = 0.9
-                    new_confidence_bound = 0.7
-                    print(f"模型 {j} 预测中")
-                    # 使用未标记数据让模型 j 进行预测
-                    j_logits = self.estimators[j].predict(train_u)
-                    ulb_y_j = np.argmax(j_logits, axis=1)
-                    # j_confidence = self.calculate_confidence(j_logits)
-                    # # 置信度低的样本使用 -1 标记
-                    # ulb_y_j = np.where(
-                    #     (
-                    #         (j_confidence > base_confidence_bound)
-                    #         & (np.argmax(j_logits, axis=1) < min_new_label)
-                    #     )
-                    #     | (
-                    #         (j_confidence > new_confidence_bound)
-                    #         & (np.argmax(j_logits, axis=1) >= min_new_label)
-                    #     ),
-                    #     np.argmax(j_logits, axis=1),
-                    #     -1,
-                    # )
-                    print(f"模型 {k} 预测中")
-                    # 使用未标记数据让模型 k 进行预测
-                    k_logits = self.estimators[k].predict(train_u)
-                    ulb_y_k = np.argmax(k_logits, axis=1)
-                    # k_confidence = self.calculate_confidence(k_logits)
-                    # ulb_y_k = np.where(
-                    #     (
-                    #         (k_confidence > base_confidence_bound)
-                    #         & (np.argmax(k_logits, axis=1) < min_new_label)
-                    #     )
-                    #     | (
-                    #         (k_confidence > new_confidence_bound)
-                    #         & (np.argmax(k_logits, axis=1) >= min_new_label)
-                    #     ),
-                    #     np.argmax(k_logits, axis=1),
-                    #     -1,
-                    # )
+                    # mutual consistency
+                    lb_train_u_mutual,lb_y_mutual = self.mutual_consistency(j, k, train_u)
+                    # 加入 self-consistency 的伪标签挑选准则
+                    lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, train_u)
+                    lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, train_u)
+                    # 合并两者结果
+                    lb_train_u[i], lb_y[i] = self.merge_pseudo_labels(
+                        lb_train_u_mutual, lb_y_mutual,  # 互一致性结果
+                        lb_train_u_self_j, lb_y_self_j,  # 自一致性结果（模型 j）
+                        lb_train_u_self_k, lb_y_self_k   # 自一致性结果（模型 k）
+                    )
 
-                    # 获取 j 和 k 预测一致且均不为 - 1 的未标记样本，并将它们作为模型 i 的新标记样本
-                    consistent_mask = (ulb_y_j == ulb_y_k) & (ulb_y_j != -1)
-                    lb_train_u[i] = [
-                        train_u[idx]
-                        for idx, is_true in enumerate(consistent_mask)
-                        if is_true
-                    ]
-                    lb_y[i] = [
-                        ulb_y_j[idx]
-                        for idx, is_true in enumerate(consistent_mask)
-                        if is_true
-                    ]
 
                     ############
                     # 查看伪标签的精准度
@@ -233,6 +202,91 @@ class Tri_Training:
             estimator.custom_save_model()
 
         return
+    
+    # 合并自一致性和互一致性的伪标签集
+    def merge_pseudo_labels(self, lb_train_u_mutual, lb_y_mutual, lb_train_u_self_j, lb_y_self_j, lb_train_u_self_k, lb_y_self_k):
+        """
+        合并互一致性和自一致性伪标签集：
+        - 先去重；
+        - 如果发生冲突，优先保留互一致性的结果。
+        """
+        # 初始化合并后的伪标签映射
+        final_lb_train_u = []
+        final_lb_y = []
+
+        # 建立索引到标签的映射（互一致性优先）
+        label_map = {}
+
+        # Step 1: 添加互一致性标签（优先保留）
+        for idx, sample in enumerate(lb_train_u_mutual):
+            label_map[sample] = lb_y_mutual[idx]  # 直接存储互一致性结果
+
+        # Step 2: 添加自一致性标签（如果存在冲突，忽略自一致性的结果）
+        all_self_train_u = lb_train_u_self_j + lb_train_u_self_k
+        all_self_y = lb_y_self_j + lb_y_self_k
+        for idx, sample in enumerate(all_self_train_u):
+            if sample not in label_map:  # 如果样本未被标记，直接添加
+                label_map[sample] = all_self_y[idx]
+            else:
+                # 如果样本已存在，跳过（保留互一致性结果）
+                pass
+
+        # Step 3: 构建去重后的伪标签集
+        for sample, label in label_map.items():
+            final_lb_train_u.append(sample)
+            final_lb_y.append(label)
+
+        print(f"最终伪标签数量：{len(final_lb_train_u)}")
+        return final_lb_train_u, final_lb_y
+    
+    def mutual_consistency(self, j, k, train_u):
+        print(f"模型 {j} 预测中")
+        # 使用未标记数据让模型 j 进行预测
+        j_logits = self.estimators[j].predict(train_u)
+        ulb_y_j = np.argmax(j_logits, axis=1)
+        print(f"模型 {k} 预测中")
+        # 使用未标记数据让模型 k 进行预测
+        k_logits = self.estimators[k].predict(train_u)
+        ulb_y_k = np.argmax(k_logits, axis=1)
+        # 获取一致的伪标签
+        consistent_mask = ulb_y_j == ulb_y_k
+        lb_train_u = [
+            train_u[idx]
+            for idx, is_true in enumerate(consistent_mask)
+            if is_true
+        ]
+        lb_y = [
+            ulb_y_j[idx]
+            for idx, is_true in enumerate(consistent_mask)
+            if is_true
+        ]
+        print(f"互一致性标签数量：{len(lb_train_u)}")
+        return lb_train_u,lb_y
+    
+    def self_consistency(self, model_idx, train_u):
+
+        print(f"模型 {model_idx} 自一致性检测中")
+        logits_weak = self.estimators[model_idx].predict(train_u, self.weak_augamentation)
+        logits_strong = self.estimators[model_idx].predict(train_u, self.strong_augamentation)
+
+        # 获取预测类别
+        ulb_y_weak = np.argmax(logits_weak, axis=1)
+        ulb_y_strong = np.argmax(logits_strong, axis=1)
+
+        # 获取一致的伪标签（弱增强与强增强结果相同）
+        consistent_mask = ulb_y_weak == ulb_y_strong
+        lb_train_u = [
+            train_u[idx]
+            for idx, is_true in enumerate(consistent_mask)
+            if is_true
+        ]
+        lb_y = [
+            ulb_y_weak[idx]
+            for idx, is_true in enumerate(consistent_mask)
+            if is_true
+        ]
+        print(f"模型 {model_idx} 自一致性标记数量：{len(lb_train_u)}")
+        return lb_train_u, lb_y
 
     def predict(self, datums):
         # 预测新数据集 X，返回预测结果
@@ -256,3 +310,84 @@ class Tri_Training:
         """
         confidence = 1 - entropy(logits, axis=1) / np.log(logits.shape[1])
         return confidence
+    
+    def build_transform(self):
+        SIZE = (224, 224)
+        PIXEL_MEAN = [0.48145466, 0.4578275, 0.40821073]
+        PIXEL_STD = [0.26862954, 0.26130258, 0.27577711]
+        interp_mode = InterpolationMode.BICUBIC
+        input_size = SIZE
+
+        print("Building weak augmentations")
+        weak_aug = []
+
+        # 添加 RandomHorizontalFlip
+        print("+ random horizontal flip")
+        weak_aug += [RandomHorizontalFlip()]
+
+        # 添加 RandomCrop
+        print("+ random crop with padding=0.125 and padding_mode='reflect'")
+        weak_aug += [RandomCrop(size=input_size, padding=int(0.125 * max(input_size)), padding_mode='reflect')]
+
+        # 调整大小
+        print(f"+ resize the smaller edge to {max(input_size)}")
+        weak_aug += [Resize(max(input_size), interpolation=interp_mode)]
+
+        # 中心裁剪
+        print(f"+ {input_size[0]}x{input_size[1]} center crop")
+        weak_aug += [CenterCrop(input_size)]
+
+        # 转为Tensor
+        print("+ to torch tensor of range [0, 1]")
+        weak_aug += [ToTensor()]
+
+        # 归一化
+        print(f"+ normalization (mean={PIXEL_MEAN}, std={PIXEL_STD})")
+        weak_aug += [Normalize(mean=PIXEL_MEAN, std=PIXEL_STD)]
+
+        weak_aug = Compose(weak_aug)
+
+        print("Building strong augmentations")
+        strong_aug = []
+
+        # 添加 RandomHorizontalFlip
+        print("+ random horizontal flip")
+        strong_aug += [RandomHorizontalFlip()]
+
+        # 添加 RandomCrop
+        print("+ random crop with padding=0.125 and padding_mode='reflect'")
+        strong_aug += [RandomCrop(size=input_size, padding=int(0.125 * max(input_size)), padding_mode='reflect')]
+
+        # 添加随机颜色抖动
+        print("+ random color jitter")
+        strong_aug += [ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1)]
+
+        # 随机灰度
+        print("+ random grayscale")
+        strong_aug += [RandomGrayscale(p=0.2)]
+
+        # 随机模糊
+        print("+ random gaussian blur")
+        strong_aug += [RandomApply([GaussianBlur(kernel_size=3)], p=0.1)]
+
+        # 调整大小
+        print(f"+ resize the smaller edge to {max(input_size)}")
+        strong_aug += [Resize(max(input_size), interpolation=interp_mode)]
+
+        # 中心裁剪
+        print(f"+ {input_size[0]}x{input_size[1]} center crop")
+        strong_aug += [CenterCrop(input_size)]
+
+        # 转为Tensor
+        print("+ to torch tensor of range [0, 1]")
+        strong_aug += [ToTensor()]
+
+        # 归一化
+        print(f"+ normalization (mean={PIXEL_MEAN}, std={PIXEL_STD})")
+        strong_aug += [Normalize(mean=PIXEL_MEAN, std=PIXEL_STD)]
+
+        strong_aug = Compose(strong_aug)
+
+        return weak_aug, strong_aug
+
+

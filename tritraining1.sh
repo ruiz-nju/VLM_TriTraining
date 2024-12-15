@@ -1,6 +1,6 @@
 DEVICE=1
 
-for dataset in fgvc_aircraft
+for dataset in fgvc_aircraft eurosat
 do 
     for seed in 1 
     do 

@@ -723,15 +723,16 @@ class TrainerX(SimpleTrainer):
 
             end = time.time()
 
-    def predict(self, datums):
+    def predict(self, datums, custom_transform=None):
         self.set_model_mode("eval")
         cfg = self.cfg
+        tfm = self.dm.tfm_test if custom_transform is None else custom_transform
         dataloader = build_data_loader(
             cfg,
             sampler_type=cfg.DATALOADER.TEST.SAMPLER,
             data_source=datums,
             batch_size=cfg.DATALOADER.TEST.BATCH_SIZE,
-            tfm=self.dm.tfm_test,
+            tfm=tfm,
             is_train=False,
         )
         all_outputs = []
