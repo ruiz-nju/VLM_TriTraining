@@ -1,31 +1,36 @@
-# 用于自动 计算 HM 等数据
-
-
+# 用于自动计算 HM 等数据
 import numpy as np
 import os.path as osp
-from dassl.utils import check_isfile, listdir_nohidden
+import warnings
+from dassl.utils import check_isfile
+
+# 禁用所有警告
+warnings.filterwarnings("ignore")
 
 
 def hm(a, b):
-    return 2 * a * b / (a + b)
+    return 2 * a * b / (a + b) if a + b > 0 else 0.0
 
 
 def read_result(file: str):
-    with open(file, "r") as f:
-        lines = f.readlines()
+    try:
+        with open(file, "r") as f:
+            lines = f.readlines()
 
-    # 获取倒数第四行
-    target_line = lines[-4]
+        result = []
+        target_lines = [lines[-4], lines[-3], lines[-2], lines[-1]]
 
-    # 提取 "Accuracy" 后面的数值
-    if "Accuracy" in target_line:
-        return float(target_line.split(":")[-1].strip())
-    else:
-        raise ValueError(f"Accuracy not found in {file}")
+        for target_line in target_lines:
+            # 提取 ":" 后面的数值
+            if "Accuracy" in target_line:
+                result.append(float(target_line.split(":")[-1].strip()))
+        return result
+    except Exception:
+        return None  # 直接返回 None，跳过报错
 
 
-def parse(dataset: str):
-    dir_name = "output_50epoch_25epoch"
+def show_result(dataset: str):
+    dir_name = "output"
     base_dir = osp.join(
         dir_name,
         "TriTraining/base2novel_test_base",
@@ -38,38 +43,49 @@ def parse(dataset: str):
         dataset,
         "shots_16/unlabeled_shots_0",
     )
-    result = [0.0, 0.0, 0.0]
+
+    base_accs = []
+    new_accs = []
+    hm_accs = []
 
     for seed in range(1, 4):
-        # 构建文件路径
-        base_file = osp.join(base_dir, f"seed_{seed}", "log.txt")
-        new_file = osp.join(new_dir, f"seed_{seed}", "log.txt")
+        try:
+            # 构建文件路径
+            base_file = osp.join(base_dir, f"seed_{seed}", "log.txt")
+            new_file = osp.join(new_dir, f"seed_{seed}", "log.txt")
 
-        # 确保文件存在
-        assert check_isfile(base_file), f"File not found: {base_file}"
-        assert check_isfile(new_file), f"File not found: {new_file}"
+            if check_isfile(base_file) and check_isfile(new_file):
+                # 读取 Accuracy 并计算 HM
+                base_acc = read_result(base_file)
+                new_acc = read_result(new_file)
 
-        # 读取 Accuracy 并计算 HM
-        base_acc = read_result(base_file)
-        new_acc = read_result(new_file)
-        hm_acc = hm(base_acc, new_acc)
+                if base_acc is not None and new_acc is not None:
+                    hm_acc = hm(base_acc[0], new_acc[0])
+                    base_accs.append(base_acc[0])
+                    new_accs.append(new_acc[0])
+                    hm_accs.append(hm_acc)
 
-        # 打印单个 seed 的结果
+                    # 打印单个 seed 的结果
+                    print(
+                        f"Seed {seed}: base: {base_acc[0] * 100:.2f} ({base_acc[1] * 100:.2f} {base_acc[2] * 100:.2f} {base_acc[3] * 100:.2f}), "
+                        f"new: {new_acc[0] * 100:.2f} ({new_acc[1] * 100:.2f} {new_acc[2] * 100:.2f} {new_acc[3] * 100:.2f}), "
+                        f"hm: {hm_acc * 100:.2f}"
+                    )
+        except Exception:
+            # 静默忽略任何异常
+            continue
+
+    # 如果所有种子的结果都成功读取，计算平均值
+    if len(base_accs) == 3 and len(new_accs) == 3 and len(hm_accs) == 3:
+        avg_base = np.mean(base_accs)
+        avg_new = np.mean(new_accs)
+        avg_hm = np.mean(hm_accs)
         print(
-            f"Seed {seed}: base: {base_acc * 100:.2f}, new: {new_acc * 100:.2f}, hm: {hm_acc * 100:.2f}"
+            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}, new: {avg_new * 100:.2f}, hm: {avg_hm * 100:.2f}"
         )
-
-        # 累加结果
-        result[0] += base_acc
-        result[1] += new_acc
-        result[2] += hm_acc
-
-    # 计算平均值
-    result = [r / 3 for r in result]
-    print(
-        f"Average: base: {result[0] * 100:.2f}, new: {result[1] * 100:.2f}, hm: {result[2] * 100:.2f}"
-    )
-    return result
+        return avg_base, avg_new, avg_hm
+    else:
+        return None, None, None
 
 
 def main():
@@ -82,24 +98,34 @@ def main():
         "caltech101",
         "food101",
         "oxford_pets",
-        # "sun397",
-        # "ucf101",
+        "sun397",
+        "ucf101",
     ]
 
-    total_result = [0.0, 0.0, 0.0]  # 用于累加所有数据集的结果
+    all_avg_base = []
+    all_avg_new = []
+    all_avg_hm = []
 
     for dataset in datasets:
-        print(f"---- Dataset: {dataset} ----")
-        result = parse(dataset)
-        # 累加每个数据集的结果
-        total_result = [total_result[i] + result[i] for i in range(3)]
+        try:
+            print(f"---- Dataset: {dataset} ----")
+            avg_base, avg_new, avg_hm = show_result(dataset)
+            if avg_base is not None and avg_new is not None and avg_hm is not None:
+                all_avg_base.append(avg_base)
+                all_avg_new.append(avg_new)
+                all_avg_hm.append(avg_hm)
+        except Exception:
+            # 静默忽略任何异常
+            continue
 
-    # 计算所有数据集的平均值
-    total_result = [r / len(datasets) for r in total_result]
-    print(f"---- Overall Results ----")
-    print(
-        f"Average: base: {total_result[0] * 100:.2f}, new: {total_result[1] * 100:.2f}, hm: {total_result[2] * 100:.2f}"
-    )
+    # 如果所有数据集都有平均值，计算整体平均值
+    if len(all_avg_base) == len(datasets):
+        overall_avg_base = np.mean(all_avg_base)
+        overall_avg_new = np.mean(all_avg_new)
+        overall_avg_hm = np.mean(all_avg_hm)
+        print(
+            f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, hm: {overall_avg_hm * 100:.2f}"
+        )
 
 
 if __name__ == "__main__":

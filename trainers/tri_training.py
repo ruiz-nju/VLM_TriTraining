@@ -325,13 +325,12 @@ class Tri_Training:
         print("+ random horizontal flip")
         weak_aug += [RandomHorizontalFlip()]
 
-        # 添加 RandomCrop
+        # 确保图像大小足够再进行 RandomCrop
+        print(f"+ resize the smaller edge to {max(input_size)} (ensure size > crop size)")
+        weak_aug += [Resize(max(input_size), interpolation=interp_mode)]
+
         print("+ random crop with padding=0.125 and padding_mode='reflect'")
         weak_aug += [RandomCrop(size=input_size, padding=int(0.125 * max(input_size)), padding_mode='reflect')]
-
-        # 调整大小
-        print(f"+ resize the smaller edge to {max(input_size)}")
-        weak_aug += [Resize(max(input_size), interpolation=interp_mode)]
 
         # 中心裁剪
         print(f"+ {input_size[0]}x{input_size[1]} center crop")
@@ -354,7 +353,10 @@ class Tri_Training:
         print("+ random horizontal flip")
         strong_aug += [RandomHorizontalFlip()]
 
-        # 添加 RandomCrop
+        # 确保图像大小足够再进行 RandomCrop
+        print(f"+ resize the smaller edge to {max(input_size)} (ensure size > crop size)")
+        strong_aug += [Resize(max(input_size), interpolation=interp_mode)]
+
         print("+ random crop with padding=0.125 and padding_mode='reflect'")
         strong_aug += [RandomCrop(size=input_size, padding=int(0.125 * max(input_size)), padding_mode='reflect')]
 
@@ -369,10 +371,6 @@ class Tri_Training:
         # 随机模糊
         print("+ random gaussian blur")
         strong_aug += [RandomApply([GaussianBlur(kernel_size=3)], p=0.1)]
-
-        # 调整大小
-        print(f"+ resize the smaller edge to {max(input_size)}")
-        strong_aug += [Resize(max(input_size), interpolation=interp_mode)]
 
         # 中心裁剪
         print(f"+ {input_size[0]}x{input_size[1]} center crop")
@@ -389,5 +387,3 @@ class Tri_Training:
         strong_aug = Compose(strong_aug)
 
         return weak_aug, strong_aug
-
-
