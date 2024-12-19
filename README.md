@@ -37,7 +37,7 @@ pip install setuptools==59.5.0
 
 ## How to Run
 
-We provide the running script `VLM_TriTraining.sh`, which allow you to easily run the experiment. Make sure you change the path in Ensure you modify the file paths in the following scripts before running:
+We provide the running script `VLM_TriTraining.sh`, which allow you to easily run the experiment. Make sure you change the `DATA` path in the following scripts before running:
 
 - `scripts/tritraining/base2novel_train.sh`
 - `scripts/tritraining/base2novel_test_base.sh` 
