@@ -16,6 +16,8 @@ class ImageNet(DatasetBase):
     def __init__(self, cfg):
         root = os.path.abspath(os.path.expanduser(cfg.DATASET.ROOT))
         self.dataset_dir = os.path.join(root, self.dataset_dir)
+
+        # self.dataset_dir = '/root/imagenet/'
         self.image_dir = os.path.join(self.dataset_dir, "images")
         self.preprocessed = os.path.join(self.dataset_dir, "preprocessed.pkl")
         self.split_fewshot_dir = os.path.join(self.dataset_dir, "split_fewshot")
@@ -41,61 +43,46 @@ class ImageNet(DatasetBase):
         num_shots = cfg.DATASET.NUM_SHOTS
         num_unlabled_shots = cfg.DATASET.NUM_UNLABELED_SHOTS
         if num_shots >= 1:
-            if cfg.TRAINER.STRATEGY == "supervised":
+            if cfg.TRAINER.STRATEGY == "semi-supervised":
                 seed = cfg.SEED
                 preprocessed = os.path.join(
-                    self.split_fewshot_dir, f"shot_{num_shots}-seed_{seed}.pkl"
+                    self.split_fewshot_dir,
+                    f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabled_shots}-seed_{seed}.pkl",
                 )
 
                 if os.path.exists(preprocessed):
                     print(f"Loading preprocessed few-shot data from {preprocessed}")
                     with open(preprocessed, "rb") as file:
                         data = pickle.load(file)
-                        train = data["train"]
-                else:
-                    train = self.generate_fewshot_dataset(train, num_shots=num_shots)
-                    data = {"train": train}
-                    print(f"Saving preprocessed few-shot data to {preprocessed}")
-                    with open(preprocessed, "wb") as file:
-                        pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
-
-                subsample = cfg.DATASET.SUBSAMPLE_CLASSES
-                train, test = OxfordPets.subsample_classes(
-                    train, test, subsample=subsample
-                )
-
-                super().__init__(train_x=train, val=test, test=test)
-            elif cfg.TRAINER.STRATEGY == "semi-supervised":
-                seed = cfg.SEED
-                preprocessed = os.path.join(
-                    self.split_fewshot_dir, f"shot_{num_shots}-seed_{seed}.pkl"
-                )
-
-                if os.path.exists(preprocessed):
-                    print(f"Loading preprocessed few-shot data from {preprocessed}")
-                    with open(preprocessed, "rb") as file:
-                        data = pickle.load(file)
-                        train_x = data["train_x"]
-                        train_u = data["train_u"]
+                        train_x, train_u, val = (
+                            data["train_x"],
+                            data["train_u"],
+                            data["val"],
+                        )
                 else:
                     train_x = self.generate_fewshot_dataset(train, num_shots=num_shots)
                     train_u = self.generate_fewshot_dataset(
                         train, num_shots=num_unlabled_shots
                     )
-                    data = {"train_x": train_x, "train_u": train_u}
+                    val = self.generate_fewshot_dataset(
+                        train, num_shots=min(num_shots, 4)
+                    )
+                    data = {"train_x": train_x, "train_u": train_u, "val": val}
                     print(f"Saving preprocessed few-shot data to {preprocessed}")
                     with open(preprocessed, "wb") as file:
                         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
                 subsample = cfg.DATASET.SUBSAMPLE_CLASSES
-                train_x, test = OxfordPets.subsample_classes(
-                    train_x, test, subsample=subsample
+
+                train_x, val, test = OxfordPets.subsample_classes(
+                    train_x, val, test, subsample=subsample
+                )
+                super().__init__(
+                    train_x=train_x, train_u=train_u, val=val, test=test, cfg=cfg
                 )
 
-                super().__init__(train_x=train_x, train_u=train_u, val=test, test=test)
-
     @staticmethod
-    def read_classnames(text_file):
+    def read_classnames(text_file):  # 得到所有的class name
         """Return a dictionary containing
         key-value pairs of <folder name>: <class name>.
         """
@@ -107,10 +94,10 @@ class ImageNet(DatasetBase):
                 folder = line[0]
                 classname = " ".join(line[1:])
                 classnames[folder] = classname
-        return classnames
+        return classnames  # 是一个array，数值为foldname: classname
 
     def read_data(self, classnames, split_dir):
-        split_dir = os.path.join(self.image_dir, split_dir)
+        split_dir = os.path.join(self.image_dir, split_dir)  # 分别对应train, val
         folders = sorted(f.name for f in os.scandir(split_dir) if f.is_dir())
         items = []
 

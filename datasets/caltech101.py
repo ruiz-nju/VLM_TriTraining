@@ -99,6 +99,7 @@ class Caltech101(DatasetBase):
                     print(f"Saving preprocessed few-shot data to {preprocessed}")
                     with open(preprocessed, "wb") as file:
                         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
+
                 subsample = cfg.DATASET.SUBSAMPLE_CLASSES
                 train_x, val, test = OxfordPets.subsample_classes(
                     train_x, val, test, subsample=subsample
