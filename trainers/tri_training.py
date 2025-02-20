@@ -176,7 +176,6 @@ class Tri_Training:
                                 f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] / (e_prime[i] - e[i])}, 更新模型 {i}"
                             )
                             # 随机选择部分样本来更新模型
-                            # lb_index = np.random.choice(len(lb_y[i]), len(lb_y[i]) // 2)
                             lb_index = np.random.choice(
                                 len(lb_y[i]), int(e_prime[i] * l_prime[i] / e[i] - 1)
                             )
@@ -194,10 +193,13 @@ class Tri_Training:
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
                     print(f"划分到基类中的样本数量: {num_base_label}")
                     print(f"划分到新类中的样本数量: {num_new_label}")
+                    ##################
+                    # 根据新加的样本数量计算最大迭代次数
+                    # max_epoch = round(len(lb_y[i]) ** (1 / 2)) + 5
+                    ##################
                     self.estimators[i].fit(
-                        train_x, lb_train_u[i], lb_y[i], max_epoch=20
+                        train_x, lb_train_u[i], lb_y[i], max_epoch=15
                     )
-                    # self.estimators[i].fit(train_x, lb_train_u[i], lb_y[i], max_epoch=1)
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
                     l_prime[i] = len(lb_y[i])

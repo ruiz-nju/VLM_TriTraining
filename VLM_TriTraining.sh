@@ -1,7 +1,7 @@
 #!/bin/bash
 DEVICE=0
 
-for dataset in caltech101 dtd eurosat fgvc_aircraft food101 oxford_flowers oxford_pets stanford_cars sun307 ucf101
+for dataset in caltech101 dtd eurosat fgvc_aircraft food101 oxford_flowers oxford_pets stanford_cars sun397 ucf101
 do 
     for seed in 1 2 3
     do 

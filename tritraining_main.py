@@ -45,7 +45,7 @@ import pdb
 
 def setup_cfg(args, model_names):
     print("----------Build up cfg----------")
-    prompts = ["a photo of a", "an image of a", "a scene showing a"]
+    prompts = ["a photo of a", "a photo of many", "an image of a"]
     cfg = [get_cfg_default() for _ in range(3)]
     for i in range(3):
         extend_cfg(cfg[i])
@@ -207,16 +207,9 @@ def main(args):
     print(f"test size: {len(test)}")
 
     if args.eval_only:
+        # output/TriTraining/base2novel_train/dtd/shots_16/unlabeled_shots_0/seed_1/model_0
+        # PromptSRC
         load_dirs = [osp.join(cfg[i].MODEL_DIR, model_names[i]) for i in range(3)]
-        # load_dirs = [
-        #     osp.join(
-        #         "output_different_tritraining_iter",
-        #         "iter_16",
-        #         cfg[i].MODEL_DIR,
-        #         model_names[i],
-        #     )
-        #     for i in range(3)
-        # ]
         for i in range(3):
             models[i].custom_load_model(load_dirs[i])
 

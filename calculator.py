@@ -67,9 +67,10 @@ def show_result(dataset: str):
 
                     # 打印单个 seed 的结果
                     print(
-                        f"Seed {seed}: base: {base_acc[0] * 100:.2f} ({base_acc[1] * 100:.2f} {base_acc[2] * 100:.2f} {base_acc[3] * 100:.2f}), "
-                        f"new: {new_acc[0] * 100:.2f} ({new_acc[1] * 100:.2f} {new_acc[2] * 100:.2f} {new_acc[3] * 100:.2f}), "
-                        f"hm: {hm_acc * 100:.2f}"
+                        # f"Seed {seed}: base: {base_acc[0] * 100:.2f} ({base_acc[1] * 100:.2f} {base_acc[2] * 100:.2f} {base_acc[3] * 100:.2f}), "
+                        # f"new: {new_acc[0] * 100:.2f} ({new_acc[1] * 100:.2f} {new_acc[2] * 100:.2f} {new_acc[3] * 100:.2f}), "
+                        # f"hm: {hm_acc * 100:.2f}"
+                        f"Seed {seed}: base: {base_acc[0] * 100:.2f}, new: {new_acc[0] * 100:.2f}, hm: {hm_acc * 100:.2f}"
                     )
         except Exception:
             # 静默忽略任何异常
@@ -94,12 +95,12 @@ def main():
         "eurosat",
         "fgvc_aircraft",
         "oxford_flowers",
-        "stanford_cars",
         "caltech101",
         "food101",
         "oxford_pets",
-        "sun397",
         "ucf101",
+        "sun397",
+        # "stanford_cars",
     ]
 
     all_avg_base = []
