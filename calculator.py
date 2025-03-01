@@ -91,15 +91,15 @@ def show_result(dataset: str):
 
 def main():
     datasets = [
+        "caltech101",
         "dtd",
         "eurosat",
         "fgvc_aircraft",
-        "oxford_flowers",
-        "caltech101",
         "food101",
+        "oxford_flowers",
+        "sun397",
         "oxford_pets",
         "ucf101",
-        "sun397",
         # "stanford_cars",
     ]
 

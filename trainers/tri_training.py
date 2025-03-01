@@ -28,6 +28,7 @@ class Tri_Training:
         # 初始化函数，接受三个基本分类器
         self.estimators = [base_estimator_1, base_estimator_2, base_estimator_3]
         self.weak_augamentation, self.strong_augamentation = self.build_transform()
+        self.min_new_label = -1  # wait to init
 
     def measure_error(self, datums, j, k):
         # 计算模型 j 和模型 k 之间的错误率
@@ -67,7 +68,7 @@ class Tri_Training:
 
     def fit(self, train_x, train_u):
         num_classes = max(datum._real_label for datum in train_u) + 1
-        min_new_label = math.ceil(num_classes / 2)
+        self.min_new_label = math.ceil(num_classes / 2)
         warm_up_epochs = 5
         for i, model in enumerate(self.estimators):
             # 抽样
@@ -112,19 +113,6 @@ class Tri_Training:
                 if e[i] < e_prime[i]:
                     # only mutual consistency
                     lb_train_u[i], lb_y[i] = self.mutual_consistency(j, k, train_u)
-                    ############
-                    # 查看伪标签的精准度
-                    num_pseudo_base = sum(1 for lb in lb_y[i] if lb < min_new_label)
-                    num_pseudo_new = sum(1 for lb in lb_y[i] if lb >= min_new_label)
-                    real_labels = [datum._real_label for datum in lb_train_u[i]]
-                    contrast = np.array(real_labels) == np.array(lb_y[i])
-                    print(
-                        f"基类伪标注的精确度: {sum(1 for t in range(len(contrast)) if contrast[t] and lb_y[i][t] < min_new_label) / num_pseudo_base}"
-                    )
-                    print(
-                        f"新类伪标注的精确度: {sum(1 for t in range(len(contrast)) if contrast[t] and lb_y[i][t] >= min_new_label) / num_pseudo_new}"
-                    )
-                    #############
 
                     if l_prime[i] == 0:
                         l_prime[i] = int(e[i] / (e_prime[i] - e[i]) + 1)
@@ -145,14 +133,14 @@ class Tri_Training:
                             print(f"错误样本数量减少，更新模型 {i}")
                             update[i] = True
                         # 错误样本数量增加，但增加的数量不多
-                        elif l_prime[i] > e[i] / (e_prime[i] - e[i]):
+                        elif l_prime[i] > e[i] ** 3 / (e_prime[i] ** 3 - e[i] ** 3):
                             print(
-                                f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] / (e_prime[i] - e[i])}, 更新模型 {i}"
+                                f"错误样本数量增加, 但前轮伪标注数量大于 {e[i]**3 / (e_prime[i]**3 - e[i]**3)}, 更新模型 {i}"
                             )
                             lb_index = np.random.choice(
                                 len(lb_y[i]),
                                 min(
-                                    int((e_prime[i] / e[i]) * l_prime[i] - 1),
+                                    int((e_prime[i] / e[i]) ** 3 * l_prime[i] - 1),
                                     len(lb_y[i]),
                                 ),
                             )
@@ -166,8 +154,8 @@ class Tri_Training:
                     print(f"----------------模型 {i} 正在被更新----------------")
                     # 将标记数据集与新标记的未标记样本合并，并重新训练模型
                     print(f"为模型 {i} 添加了 {len(lb_y[i])} 个新标记样本")
-                    num_base_label = sum(1 for lb in lb_y[i] if lb < min_new_label)
-                    num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
+                    num_base_label = sum(1 for lb in lb_y[i] if lb < self.min_new_label)
+                    num_new_label = sum(1 for lb in lb_y[i] if lb >= self.min_new_label)
                     print(f"划分到基类中的样本数量: {num_base_label}")
                     print(f"划分到新类中的样本数量: {num_new_label}")
                     self.estimators[i].fit(
@@ -192,6 +180,103 @@ class Tri_Training:
             estimator.custom_save_model()
 
         return
+
+    def mutual_consistency(self, j, k, train_u):
+        print(f"模型 {j} 预测中")
+        # 使用未标记数据让模型 j 进行预测
+        j_logits = self.estimators[j].predict(train_u)
+        print(f"模型 {k} 预测中")
+        # 使用未标记数据让模型 k 进行预测
+        k_logits = self.estimators[k].predict(train_u)
+
+        # -------------------------------
+        # 不使用置信度过滤时的伪标签准确度统计
+        # 直接取每个模型的最大概率预测作为伪标签
+        ulb_y_j_old = np.argmax(j_logits, axis=1)
+        ulb_y_k_old = np.argmax(k_logits, axis=1)
+
+        # 统计两个模型预测一致的样本数量
+        consistent_mask_old = ulb_y_j_old == ulb_y_k_old
+        lb_train_u_old = [
+            train_u[idx] for idx, is_true in enumerate(consistent_mask_old) if is_true
+        ]
+        lb_y_old = [
+            ulb_y_j_old[idx]
+            for idx, is_true in enumerate(consistent_mask_old)
+            if is_true
+        ]
+        base_acc_old, new_acc_old = self.pseudo_label_acc(lb_train_u_old, lb_y_old)
+        print(f"基于置信度筛选前，共有 {len(lb_train_u_old)} 个伪标注")
+        print(
+            f"基类准确度为 {base_acc_old * 100:.2f}，新类准确度为 {new_acc_old * 100:.2f}"
+        )
+        # -------------------------------
+
+        ############################
+        # add confidence bound
+        ############################
+        confidence_bound = 0.8
+        j_confidence = self.calculate_confidence(j_logits)
+        k_confidence = self.calculate_confidence(k_logits)
+        ulb_y_j = np.where(
+            j_confidence > confidence_bound,
+            np.argmax(j_logits, axis=1),
+            -1,
+        )
+        ulb_y_k = np.where(
+            k_confidence > confidence_bound,
+            np.argmax(k_logits, axis=1),
+            -1,
+        )
+
+        # 获取一致的伪标签
+        consistent_mask = (ulb_y_j == ulb_y_k) & (ulb_y_j != -1)
+        lb_train_u = [
+            train_u[idx] for idx, is_true in enumerate(consistent_mask) if is_true
+        ]
+        lb_y = [ulb_y_j[idx] for idx, is_true in enumerate(consistent_mask) if is_true]
+        base_acc, new_acc = self.pseudo_label_acc(lb_train_u, lb_y)
+        print(f"基于置信度筛选后，共有 {len(lb_train_u)} 个伪标注")
+        print(f"基类准确度为 {base_acc * 100:.2f}，新类准确度为 {new_acc * 100:.2f}")
+        print(f"伪标注数量减少了 {len(lb_train_u_old) - len(lb_train_u)}")
+        print(
+            f"基类准确度提高了 {(base_acc - base_acc_old) * 100:.2f}，新类准确度提高了 {(new_acc - new_acc_old)  * 100:.2f}"
+        )
+        return lb_train_u, lb_y
+
+    def calculate_confidence(self, logits):
+        """
+        logits.shape: (num_samples, num_classes)
+        """
+        confidence = 1 - entropy(logits, axis=1) / np.log(logits.shape[1])
+        return confidence
+
+    def pseudo_label_acc(self, lb_train_u, lb_y):
+        ############
+        # 查看伪标签的精准度
+        num_pseudo_base = sum(1 for lb in lb_y if lb < self.min_new_label)
+        num_pseudo_new = sum(1 for lb in lb_y if lb >= self.min_new_label)
+        real_labels = [datum._real_label for datum in lb_train_u]
+        contrast = np.array(real_labels) == np.array(lb_y)
+        base_acc = (
+            sum(
+                1
+                for t in range(len(contrast))
+                if contrast[t] and lb_y[t] < self.min_new_label
+            )
+            / num_pseudo_base
+        )
+        new_acc = (
+            sum(
+                1
+                for t in range(len(contrast))
+                if contrast[t] and lb_y[t] >= self.min_new_label
+            )
+            / num_pseudo_new
+        )
+
+        return base_acc, new_acc
+        #############
 
     # 合并自一致性和互一致性的伪标签集
     def merge_pseudo_labels(
@@ -237,24 +322,6 @@ class Tri_Training:
         print(f"最终伪标签数量：{len(final_lb_train_u)}")
         return final_lb_train_u, final_lb_y
 
-    def mutual_consistency(self, j, k, train_u):
-        print(f"模型 {j} 预测中")
-        # 使用未标记数据让模型 j 进行预测
-        j_logits = self.estimators[j].predict(train_u)
-        ulb_y_j = np.argmax(j_logits, axis=1)
-        print(f"模型 {k} 预测中")
-        # 使用未标记数据让模型 k 进行预测
-        k_logits = self.estimators[k].predict(train_u)
-        ulb_y_k = np.argmax(k_logits, axis=1)
-        # 获取一致的伪标签
-        consistent_mask = ulb_y_j == ulb_y_k
-        lb_train_u = [
-            train_u[idx] for idx, is_true in enumerate(consistent_mask) if is_true
-        ]
-        lb_y = [ulb_y_j[idx] for idx, is_true in enumerate(consistent_mask) if is_true]
-        print(f"互一致性标签数量：{len(lb_train_u)}")
-        return lb_train_u, lb_y
-
     def self_consistency(self, model_idx, train_u):
 
         print(f"模型 {model_idx} 自一致性检测中")
@@ -295,13 +362,6 @@ class Tri_Training:
         # 返回最终的预测结果
         y_pred = pred[0]
         return y_pred, output
-
-    def calculate_confidence(self, logits):
-        """
-        logits.shape: (num_samples, num_classes)
-        """
-        confidence = 1 - entropy(logits, axis=1) / np.log(logits.shape[1])
-        return confidence
 
     def build_transform(self):
         SIZE = (224, 224)
