@@ -68,11 +68,11 @@ class Tri_Training:
     def fit(self, train_x, train_u):
         num_classes = max(datum._real_label for datum in train_u) + 1
         min_new_label = math.ceil(num_classes / 2)
-        # 初始化每个分类器的训练，使用带放回抽样生成新的训练集
+        warm_up_epochs = 5
         for i, model in enumerate(self.estimators):
+            # 抽样
             sub_train_x = sklearn.utils.resample(train_x)
             print(f"------------Tritraining is fitting estimator: {i}------------")
-            warm_up_epochs = 5
             # 检查是否已经训练过模型
             model_dir = osp.join(
                 f"pretraining_{warm_up_epochs}epoch",
@@ -88,20 +88,14 @@ class Tri_Training:
                 # 保存模型
                 model.custom_save_model(parent_dir=f"pretraining_{warm_up_epochs}epoch")
 
-        # e_prime: 用于存储每个模型的初始错误率，初始化为 0.5
         e_prime = [0.5] * 3
-        # l_prime: 用于记录每个模型的标记样本数量
         l_prime = [0] * 3
-        # e: 用于存储每次迭代计算的错误率
         e = [0] * 3
-        # update: 标记是否需要更新模型
         update = [False] * 3
-        # lb_X 和 lb_y: 用于存储标记样本的特征和标签
         lb_train_u, lb_y = [[]] * 3, [[]] * 3
         improve = True
         iter = 0
 
-        # while improve and iter < 1:
         while improve:
             iter += 1
             print(f"------------------------iteration: {iter}------------------------")
@@ -109,35 +103,15 @@ class Tri_Training:
             print(f"l_prime: {l_prime}")
             print(f"e: {e}")
 
-            # 对每个模型 i 进行错误率计算并决定是否更新
             for i in range(3):
                 print(f"----------------判断模型 {i} 是否需要更新----------------")
-                # j 和 k 是除 i 以外的两个模型
                 j, k = np.delete(np.array([0, 1, 2]), i)
                 update[i] = False
-
-                # 计算模型 j 和 k 的相对错误率
                 e[i] = self.measure_error(train_x, j, k)
 
                 if e[i] < e_prime[i]:
-                    # # mutual consistency + self consistency
-                    # lb_train_u_mutual, lb_y_mutual = self.mutual_consistency(
-                    #     j, k, train_u
-                    # )
-                    # lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, train_u)
-                    # lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, train_u)
-                    # lb_train_u[i], lb_y[i] = self.merge_pseudo_labels(
-                    #     lb_train_u_mutual,
-                    #     lb_y_mutual,  # 互一致性结果
-                    #     lb_train_u_self_j,
-                    #     lb_y_self_j,  # 自一致性结果（模型 j）
-                    #     lb_train_u_self_k,
-                    #     lb_y_self_k,  # 自一致性结果（模型 k）
-                    # )
-
                     # only mutual consistency
                     lb_train_u[i], lb_y[i] = self.mutual_consistency(j, k, train_u)
-
                     ############
                     # 查看伪标签的精准度
                     num_pseudo_base = sum(1 for lb in lb_y[i] if lb < min_new_label)
@@ -175,9 +149,12 @@ class Tri_Training:
                             print(
                                 f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] / (e_prime[i] - e[i])}, 更新模型 {i}"
                             )
-                            # 随机选择部分样本来更新模型
                             lb_index = np.random.choice(
-                                len(lb_y[i]), int(e_prime[i] * l_prime[i] / e[i] - 1)
+                                len(lb_y[i]),
+                                min(
+                                    int((e_prime[i] / e[i]) * l_prime[i] - 1),
+                                    len(lb_y[i]),
+                                ),
                             )
                             lb_train_u[i] = [lb_train_u[i][idx] for idx in lb_index]
                             lb_y[i] = [lb_y[i][idx] for idx in lb_index]
@@ -193,12 +170,11 @@ class Tri_Training:
                     num_new_label = sum(1 for lb in lb_y[i] if lb >= min_new_label)
                     print(f"划分到基类中的样本数量: {num_base_label}")
                     print(f"划分到新类中的样本数量: {num_new_label}")
-                    ##################
-                    # 根据新加的样本数量计算最大迭代次数
-                    # max_epoch = round(len(lb_y[i]) ** (1 / 2)) + 5
-                    ##################
                     self.estimators[i].fit(
-                        train_x, lb_train_u[i], lb_y[i], max_epoch=15
+                        labeled_datums=train_x,
+                        unlabeled_datums=lb_train_u[i],
+                        pseudo_labels=lb_y[i],
+                        max_epoch=20,
                     )
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
