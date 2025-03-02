@@ -215,20 +215,34 @@ class Tri_Training:
         ############################
         # add confidence bound
         ############################
-        confidence_bound = 0.8
+        base_confidence_bound = 0.8
+        new_confidence_bound = 0.6
         j_confidence = self.calculate_confidence(j_logits)
         k_confidence = self.calculate_confidence(k_logits)
         ulb_y_j = np.where(
-            j_confidence > confidence_bound,
+            (
+                (j_confidence > base_confidence_bound)
+                & (np.argmax(j_logits, axis=1) < self.min_new_label)
+            )
+            | (
+                (j_confidence > new_confidence_bound)
+                & (np.argmax(j_logits, axis=1) >= self.min_new_label)
+            ),
             np.argmax(j_logits, axis=1),
             -1,
         )
         ulb_y_k = np.where(
-            k_confidence > confidence_bound,
+            (
+                (k_confidence > base_confidence_bound)
+                & (np.argmax(k_logits, axis=1) < self.min_new_label)
+            )
+            | (
+                (k_confidence > new_confidence_bound)
+                & (np.argmax(k_logits, axis=1) >= self.min_new_label)
+            ),
             np.argmax(k_logits, axis=1),
             -1,
         )
-
         # 获取一致的伪标签
         consistent_mask = (ulb_y_j == ulb_y_k) & (ulb_y_j != -1)
         lb_train_u = [
