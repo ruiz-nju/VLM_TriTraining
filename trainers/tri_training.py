@@ -215,7 +215,7 @@ class Tri_Training:
         ############################
         # add confidence bound
         ############################
-        base_confidence_bound = 0.8
+        base_confidence_bound = 0.9
         new_confidence_bound = 0.6
         j_confidence = self.calculate_confidence(j_logits)
         k_confidence = self.calculate_confidence(k_logits)
