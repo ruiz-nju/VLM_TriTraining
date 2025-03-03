@@ -642,17 +642,28 @@ class TrainerX(SimpleTrainer):
 
     # 自定义数据的 fit
     def fit(
-        self, labeled_datums, unlabeled_datums=None, pseudo_labels=None, max_epoch=None
+        self,
+        labeled_datums=None,
+        unlabeled_datums=None,
+        pseudo_labels=None,
+        max_epoch=None,
     ):
         self.reset_training_status(custom_max_epoch=max_epoch)
-        print(f"len(labeled_datums): {len(labeled_datums)}")
-        train_dataset = labeled_datums
+        assert (
+            labeled_datums or unlabeled_datums
+        ), "Both labeled datums and unlabeled datums are empty."
 
-        if unlabeled_datums is not None:
+        train_dataset = []
+
+        if labeled_datums:
+            print(f"len(labeled_datums): {len(labeled_datums)}")
+            train_dataset.extend(labeled_datums)
+
+        if unlabeled_datums:
             for datum, pseudo_label in zip(unlabeled_datums, pseudo_labels):
                 datum.bound_pseudo_label(pseudo_label.item())
+            train_dataset.extend(unlabeled_datums)
 
-            train_dataset = train_dataset + unlabeled_datums
         self.before_train()
         cfg = self.cfg
         dataloader = build_data_loader(
