@@ -93,6 +93,9 @@ class FGVCAircraft(DatasetBase):
                 train_x, val, test = OxfordPets.subsample_classes(
                     train_x, val, test, subsample=subsample
                 )
+                # 去除重复的数据
+                train_x_impath = [item.impath for item in train_x]
+                train_u = [item for item in train_u if item.impath not in train_x_impath]
                 super().__init__(
                     train_x=train_x, train_u=train_u, val=val, test=test, cfg=cfg
                 )

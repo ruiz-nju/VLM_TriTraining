@@ -64,6 +64,8 @@ class ImageNet(DatasetBase):
                     train_u = self.generate_fewshot_dataset(
                         train, num_shots=num_unlabled_shots
                     )
+                    # 去除重复的数据
+                    train_u = [item for item in train_u if item not in train_x]
                     val = self.generate_fewshot_dataset(
                         train, num_shots=min(num_shots, 4)
                     )

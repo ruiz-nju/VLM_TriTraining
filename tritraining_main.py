@@ -45,7 +45,7 @@ import pdb
 
 def setup_cfg(args, model_names):
     print("----------Build up cfg----------")
-    prompts = ["a photo of a", "a photo of many", "an image of a"]
+    prompts = ["a photo of a", "a photo of a", "an photo of a"]
     cfg = [get_cfg_default() for _ in range(3)]
     for i in range(3):
         extend_cfg(cfg[i])

@@ -72,7 +72,7 @@ class Tri_Training:
         warm_up_epochs = 5
         for i, model in enumerate(self.estimators):
             # 抽样
-            sub_train_x = sklearn.utils.resample(train_x)
+            sub_train_x = sklearn.utils.resample(train_x, replace=False, n_samples=int(2/3 * len(train_x)))
             print(f"------------Tritraining is fitting estimator: {i}------------")
             # 检查是否已经训练过模型
             model_dir = osp.join(
@@ -288,7 +288,10 @@ class Tri_Training:
             )
             / num_pseudo_new
         )
-
+        print(f"基类伪标注数量: {num_pseudo_base}")
+        print(f"新类伪标注数量: {num_pseudo_new}")
+        print(f"真实的基类数量: {sum(1 for lb in real_labels if lb < self.min_new_label)}")
+        print(f"真实的新类数量: {sum(1 for lb in real_labels if lb >= self.min_new_label)}")
         return base_acc, new_acc
         #############
 
