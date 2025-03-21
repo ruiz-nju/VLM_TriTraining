@@ -647,6 +647,7 @@ class TrainerX(SimpleTrainer):
         unlabeled_datums=None,
         pseudo_labels=None,
         max_epoch=None,
+        lower_bound_pseudo_labels=None,
     ):
         self.reset_training_status(custom_max_epoch=max_epoch)
         assert (
@@ -682,7 +683,7 @@ class TrainerX(SimpleTrainer):
 
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()
-            self.custom_run_epoch(dataloader)
+            self.custom_run_epoch(dataloader, lower_bound_pseudo_labels)
             # self.after_epoch()
         # self.after_train()
         print("Finish training")
@@ -694,7 +695,7 @@ class TrainerX(SimpleTrainer):
         # Close writer
         self.close_writer()
 
-    def custom_run_epoch(self, dataloader):
+    def custom_run_epoch(self, dataloader, lower_bound_pseudo_labels):
         self.set_model_mode("train")
         losses = MetricMeter()
         batch_time = AverageMeter()
@@ -704,7 +705,7 @@ class TrainerX(SimpleTrainer):
         end = time.time()
         for self.batch_idx, batch in enumerate(dataloader):
             data_time.update(time.time() - end)
-            loss_summary = self.forward_backward(batch)
+            loss_summary = self.forward_backward(batch, lower_bound_pseudo_labels)
             batch_time.update(time.time() - end)
             losses.update(loss_summary)
 

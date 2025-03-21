@@ -237,7 +237,7 @@ class CustomCLIP(nn.Module):
                 )
 
             return (
-                F.cross_entropy(logits, label),
+                F.cross_entropy(logits, label, reduction="none"),
                 text_features,
                 fixed_embeddings,
                 zero_shot_features,
@@ -315,12 +315,27 @@ class PromptSRC(TrainerX):
         # Keep model with GPA
         self.previous_model_gpa = None
 
-    def forward_backward(self, batch):
+    def _get_class_weights(self, labels, lower_bound, w=2.0):
+        """生成新类样本权重向量"""
+        if lower_bound is None:
+            return 1.0  # 不启用加权
+        
+        # 创建权重张量：新类样本为w，旧类为1
+        weights = torch.ones_like(labels, dtype=torch.float32)
+        new_class_mask = labels >= lower_bound
+        weights[new_class_mask] = w
+        
+        # 确保权重与损失设备一致
+        return weights.to(labels.device)
+
+    def forward_backward(self, batch, lower_bound=None):
         image, label = self.parse_batch_train(batch)
 
         model = self.model
         optim = self.optim
         scaler = self.scaler
+        # 损失加权函数
+        weights = self._get_class_weights(label, lower_bound)
 
         prec = self.cfg.TRAINER.PROMPTSRC.PREC
         if prec == "amp":
@@ -340,6 +355,8 @@ class PromptSRC(TrainerX):
                 zero_shot_logits,
                 logits,
             ) = model(image, label)
+            # 更新损失函数
+            loss_ce = (loss_ce * weights).mean()  # 加权平均
 
             # Calculate the L_SCL_text loss
             loss_scl_text = (
@@ -350,22 +367,38 @@ class PromptSRC(TrainerX):
                 )
                 * self.cfg.TRAINER.PROMPTSRC.TEXT_LOSS_WEIGHT
             )
+            # print(weights.shape) # torch.Size([batch_size])
+
             # Calculate the L_SCL_image loss
             loss_scl_image = (
                 F.l1_loss(image_ft, zs_image_embedd.cuda(), reduction="mean")
                 * self.cfg.TRAINER.PROMPTSRC.IMAGE_LOSS_WEIGHT
             )
+
             # Now calculate L_SCL_logits
-            L_SCL_logits = (
-                F.kl_div(
-                    F.log_softmax(logits / 1, dim=1),
-                    F.log_softmax(zero_shot_logits / 1, dim=1),
-                    reduction="sum",
-                    log_target=True,
-                )
-                * (1 * 1)
-                / logits.numel()
-            )
+            # L_SCL_logits = (
+            #     F.kl_div(
+            #         F.log_softmax(logits / 1, dim=1),
+            #         F.log_softmax(zero_shot_logits / 1, dim=1),
+            #         reduction="sum",
+            #         log_target=True,
+            #     )
+            #     * (1 * 1)
+            #     / logits.numel()
+            # )
+
+            # 计算 L_SCL_logits，并加权
+            kl_per_sample = F.kl_div(
+                F.log_softmax(logits / 1, dim=1),
+                F.log_softmax(zero_shot_logits / 1, dim=1),
+                reduction="none",  # 逐元素损失
+                log_target=True,
+            ).sum(dim=1)  # 对类别维度求和，得到每个样本的 KL 散度
+            # 加权损失
+            L_SCL_logits = (kl_per_sample * weights).mean()
+            # print(loss_ce)
+            # print(L_SCL_logits)
+
             L_SCL = L_SCL_logits + loss_scl_text + loss_scl_image
             loss = loss_ce + L_SCL
             optim.zero_grad()

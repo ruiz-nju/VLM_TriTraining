@@ -163,6 +163,7 @@ class Tri_Training:
                         unlabeled_datums=lb_train_u[i],
                         pseudo_labels=lb_y[i],
                         max_epoch=20,
+                        lower_bound_pseudo_labels=self.min_new_label,
                     )
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
