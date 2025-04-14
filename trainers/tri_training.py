@@ -19,12 +19,15 @@ from torchvision.transforms import (
     GaussianBlur,
     RandomGrayscale,
     RandomHorizontalFlip,
+    RandomResizedCrop
 )
+from dassl.utils import set_random_seed
 from torchvision.transforms.functional import InterpolationMode
 
 
 class Tri_Training:
-    def __init__(self, base_estimator_1, base_estimator_2, base_estimator_3):
+    def __init__(self, cfg, base_estimator_1, base_estimator_2, base_estimator_3):
+        self.cfg = cfg
         # 初始化函数，接受三个基本分类器
         self.estimators = [base_estimator_1, base_estimator_2, base_estimator_3]
         self.weak_augamentation, self.strong_augamentation = self.build_transform()
@@ -72,22 +75,11 @@ class Tri_Training:
         warm_up_epochs = 5
         for i, model in enumerate(self.estimators):
             # 抽样
-            sub_train_x = sklearn.utils.resample(train_x, replace=False, n_samples=int(2/3 * len(train_x)))
+            sub_train_x = sklearn.utils.resample(train_x, replace=False, n_samples=len(train_x))
             print(f"------------Tritraining is fitting estimator: {i}------------")
-            # 检查是否已经训练过模型
-            model_dir = osp.join(
-                f"pretraining_{warm_up_epochs}epoch",
-                model.cfg.OUTPUT_DIR,
-                model.cfg.TRAINER.NAME,
-            )
-            if osp.exists(model_dir):
-                print(f"Loading pre-trained model from {model_dir}")
-                model.custom_load_model(model_dir)
-            else:
-                print(f"Training model {i} for {warm_up_epochs} epochs")
-                model.fit(sub_train_x, max_epoch=warm_up_epochs)
-                # 保存模型
-                model.custom_save_model(parent_dir=f"pretraining_{warm_up_epochs}epoch")
+            print(f"Training model {i} for {warm_up_epochs} epochs")
+            set_random_seed(i + 1)
+            model.fit(sub_train_x, max_epoch=warm_up_epochs)
 
         e_prime = [0.5] * 3
         l_prime = [0] * 3
@@ -112,10 +104,23 @@ class Tri_Training:
 
                 if e[i] < e_prime[i]:
                     # only mutual consistency
-                    lb_train_u[i], lb_y[i] = self.mutual_consistency(j, k, train_u)
+                    lb_train_u_mutual, lb_y_mutual = self.mutual_consistency(j, k, train_u)
+                    # lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, train_u)
+                    # lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, train_u)
+                    # lb_train_u[i], lb_y[i] = self.merge_pseudo_labels(lb_train_u_mutual, lb_y_mutual, lb_train_u_self_j, lb_y_self_j, lb_train_u_self_k, lb_y_self_k)
+                    lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, lb_train_u_mutual, lb_y_mutual)
+                    base_acc_j, new_acc_j = self.pseudo_label_acc(lb_train_u_self_j, lb_y_self_j)
+                    print(f"1基类准确度为 {base_acc_j * 100:.2f}，1新类准确度为 {new_acc_j * 100:.2f}")
+                    lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, lb_train_u_mutual, lb_y_mutual)
+                    base_acc_k, new_acc_k = self.pseudo_label_acc(lb_train_u_self_k, lb_y_self_k)
+                    print(f"最终基类准确度为 {base_acc_k * 100:.2f}，最终新类准确度为 {new_acc_k * 100:.2f}")
+                    if new_acc_k > new_acc_j:
+                        lb_train_u[i], lb_y[i] = lb_train_u_self_k, lb_y_self_k 
+                    else:
+                        lb_train_u[i], lb_y[i] = lb_train_u_self_j, lb_y_self_j 
 
                     if l_prime[i] == 0:
-                        l_prime[i] = int(e[i] / (e_prime[i] - e[i]) + 1)
+                        l_prime[i] = int(e[i] ** 3 / (e_prime[i] ** 3 - e[i] ** 3) + 1)
 
                     print(f"e_prime: {e_prime}")
                     print(f"l_prime: {l_prime}")
@@ -133,14 +138,14 @@ class Tri_Training:
                             print(f"错误样本数量减少，更新模型 {i}")
                             update[i] = True
                         # 错误样本数量增加，但增加的数量不多
-                        elif l_prime[i] > e[i] ** 3 / (e_prime[i] ** 3 - e[i] ** 3):
+                        elif l_prime[i] > e[i] / (e_prime[i] - e[i]):
                             print(
-                                f"错误样本数量增加, 但前轮伪标注数量大于 {e[i]**3 / (e_prime[i]**3 - e[i]**3)}, 更新模型 {i}"
+                                f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] / (e_prime[i] - e[i])}, 更新模型 {i}"
                             )
                             lb_index = np.random.choice(
                                 len(lb_y[i]),
                                 min(
-                                    int((e_prime[i] / e[i]) ** 3 * l_prime[i] - 1),
+                                    int((e_prime[i] / e[i]) * l_prime[i] - 1),
                                     len(lb_y[i]),
                                 ),
                             )
@@ -215,8 +220,8 @@ class Tri_Training:
         ############################
         # add confidence bound
         ############################
-        base_confidence_bound = 0.9
-        new_confidence_bound = 0.6
+        base_confidence_bound = 0.99
+        new_confidence_bound = 0.9
         j_confidence = self.calculate_confidence(j_logits)
         k_confidence = self.calculate_confidence(k_logits)
         ulb_y_j = np.where(
@@ -249,7 +254,8 @@ class Tri_Training:
             train_u[idx] for idx, is_true in enumerate(consistent_mask) if is_true
         ]
         lb_y = [ulb_y_j[idx] for idx, is_true in enumerate(consistent_mask) if is_true]
-        base_acc, new_acc = self.pseudo_label_acc(lb_train_u, lb_y)
+        # lb_y = np.array([train_u[idx]._real_label for idx, is_true in enumerate(consistent_mask) if is_true])        
+        base_acc, new_acc = self.pseudo_label_acc(lb_train_u, lb_y, print_path=False)
         print(f"基于置信度筛选后，共有 {len(lb_train_u)} 个伪标注")
         print(f"基类准确度为 {base_acc * 100:.2f}，新类准确度为 {new_acc * 100:.2f}")
         print(f"伪标注数量减少了 {len(lb_train_u_old) - len(lb_train_u)}")
@@ -265,7 +271,7 @@ class Tri_Training:
         confidence = 1 - entropy(logits, axis=1) / np.log(logits.shape[1])
         return confidence
 
-    def pseudo_label_acc(self, lb_train_u, lb_y):
+    def pseudo_label_acc(self, lb_train_u, lb_y, print_path=False):
         ############
         # 查看伪标签的精准度
         num_pseudo_base = sum(1 for lb in lb_y if lb < self.min_new_label)
@@ -278,7 +284,7 @@ class Tri_Training:
                 for t in range(len(contrast))
                 if contrast[t] and lb_y[t] < self.min_new_label
             )
-            / num_pseudo_base
+            / num_pseudo_base if num_pseudo_base != 0 else 0
         )
         new_acc = (
             sum(
@@ -286,12 +292,25 @@ class Tri_Training:
                 for t in range(len(contrast))
                 if contrast[t] and lb_y[t] >= self.min_new_label
             )
-            / num_pseudo_new
+            / num_pseudo_new if num_pseudo_new != 0 else 0
         )
         print(f"基类伪标注数量: {num_pseudo_base}")
         print(f"新类伪标注数量: {num_pseudo_new}")
         print(f"真实的基类数量: {sum(1 for lb in real_labels if lb < self.min_new_label)}")
         print(f"真实的新类数量: {sum(1 for lb in real_labels if lb >= self.min_new_label)}")
+        if print_path:
+            # 输出预测错误的样本
+            paths = [datum.impath for datum in lb_train_u]  # 获取每个样本的路径
+            wrong_paths = []
+            for t in range(len(contrast)):
+                if not contrast[t]:  # 如果预测错误
+                    wrong_paths.append(paths[t])
+
+            with open('paths.txt', 'a') as f:
+                for path in wrong_paths:
+                    f.write(path + '\n')
+        
+        
         return base_acc, new_acc
         #############
 
@@ -337,11 +356,15 @@ class Tri_Training:
             final_lb_y.append(label)
 
         print(f"最终伪标签数量：{len(final_lb_train_u)}")
+        # 输出最终伪标签的准确性
+        base_acc, new_acc = self.pseudo_label_acc(final_lb_train_u, final_lb_y)
+        print(f"最终基类准确度为 {base_acc * 100:.2f}，新类准确度为 {new_acc * 100:.2f}")
         return final_lb_train_u, final_lb_y
 
-    def self_consistency(self, model_idx, train_u):
+    def self_consistency(self, model_idx, train_u, label_u):
 
         print(f"模型 {model_idx} 自一致性检测中")
+        # logits_no_aug = self.estimators[model_idx].predict(train_u)
         logits_weak = self.estimators[model_idx].predict(
             train_u, self.weak_augamentation
         )
@@ -350,18 +373,29 @@ class Tri_Training:
         )
 
         # 获取预测类别
+        ulb_y_no_aug = label_u
         ulb_y_weak = np.argmax(logits_weak, axis=1)
         ulb_y_strong = np.argmax(logits_strong, axis=1)
+        # mask1 = (ulb_y_no_aug == ulb_y_weak)
+        # mask2 = (ulb_y_weak != ulb_y_strong)
 
-        # 获取一致的伪标签（弱增强与强增强结果相同）
-        consistent_mask = ulb_y_weak == ulb_y_strong
+        # # 统计每个条件为True的数量
+        # num_true_mask1 = np.sum(mask1)
+        # num_true_mask2 = np.sum(mask2)
+
+        # print(f"条件1 (无增广 == 弱增广) 为True的数量: {num_true_mask1}")
+        # print(f"条件2 (弱增广 != 强增广) 为True的数量: {num_true_mask2}")
+
+        # 获取满足条件的伪标签（无增广 == 弱增广 != 强增广）
+        consistent_mask = (ulb_y_no_aug == ulb_y_weak) & (ulb_y_weak != ulb_y_strong)
         lb_train_u = [
             train_u[idx] for idx, is_true in enumerate(consistent_mask) if is_true
         ]
         lb_y = [
-            ulb_y_weak[idx] for idx, is_true in enumerate(consistent_mask) if is_true
+            ulb_y_no_aug[idx] for idx, is_true in enumerate(consistent_mask) if is_true
         ]
         print(f"模型 {model_idx} 自一致性标记数量：{len(lb_train_u)}")
+        print(f"其中无增广与弱增广预测一致但与强增广不一致的样本数：{np.sum(consistent_mask)}")
         return lb_train_u, lb_y
 
     def predict(self, datums):
@@ -384,7 +418,7 @@ class Tri_Training:
         SIZE = (224, 224)
         PIXEL_MEAN = [0.48145466, 0.4578275, 0.40821073]
         PIXEL_STD = [0.26862954, 0.26130258, 0.27577711]
-        interp_mode = InterpolationMode.BICUBIC
+        interp_mode = InterpolationMode.BILINEAR
         input_size = SIZE
 
         print("Building weak augmentations")
@@ -410,8 +444,8 @@ class Tri_Training:
         ]
 
         # 中心裁剪
-        print(f"+ {input_size[0]}x{input_size[1]} center crop")
-        weak_aug += [CenterCrop(input_size)]
+        # print(f"+ {input_size[0]}x{input_size[1]} center crop")
+        # weak_aug += [CenterCrop(input_size)]
 
         # 转为Tensor
         print("+ to torch tensor of range [0, 1]")
@@ -424,52 +458,98 @@ class Tri_Training:
         weak_aug = Compose(weak_aug)
 
         print("Building strong augmentations")
-        strong_aug = []
+        # strong_aug = []
+        # # 添加 RandomHorizontalFlip
+        # print("+ random horizontal flip")
+        # strong_aug += [RandomHorizontalFlip()]
+        # # 确保图像大小足够再进行 RandomCrop
+        # print(
+        #     f"+ resize the smaller edge to {max(input_size)} (ensure size > crop size)"
+        # )
+        # strong_aug += [Resize(max(input_size), interpolation=interp_mode)]
+        # print("+ random crop with padding=0.125 and padding_mode='reflect'")
+        # strong_aug += [
+        #     RandomCrop(
+        #         size=input_size,
+        #         padding=int(0.125 * max(input_size)),
+        #         padding_mode="reflect",
+        #     )
+        # ]
+        # # 添加随机颜色抖动
+        # print("+ random color jitter")
+        # strong_aug += [
+        #     ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1)
+        # ]
+        # # 随机灰度
+        # print("+ random grayscale")
+        # strong_aug += [RandomGrayscale(p=0.2)]
+        # # 随机模糊
+        # print("+ random gaussian blur")
+        # strong_aug += [RandomApply([GaussianBlur(kernel_size=3)], p=0.1)]
+        # # 中心裁剪
+        # print(f"+ {input_size[0]}x{input_size[1]} center crop")
+        # strong_aug += [CenterCrop(input_size)]
 
-        # 添加 RandomHorizontalFlip
-        print("+ random horizontal flip")
+        # # 转为Tensor
+        # print("+ to torch tensor of range [0, 1]")
+        # strong_aug += [ToTensor()]
+
+        # # 归一化
+        # print(f"+ normalization (mean={PIXEL_MEAN}, std={PIXEL_STD})")
+        # strong_aug += [Normalize(mean=PIXEL_MEAN, std=PIXEL_STD)]
+
+        # strong_aug = Compose(strong_aug)
+
+        strong_aug = []
+        cfg = self.cfg
+        # 随机裁剪
+        crop_padding = cfg.INPUT.CROP_PADDING
+        print(f"+ random crop (padding = {crop_padding})")
+        strong_aug += [RandomCrop(input_size, padding=crop_padding)]
+
+        # 随机水平翻转
+        print("+ random flip")
         strong_aug += [RandomHorizontalFlip()]
 
-        # 确保图像大小足够再进行 RandomCrop
+        # 随机色彩抖动
+        b_ = cfg.INPUT.COLORJITTER_B
+        c_ = cfg.INPUT.COLORJITTER_C
+        s_ = cfg.INPUT.COLORJITTER_S
+        h_ = cfg.INPUT.COLORJITTER_H
         print(
-            f"+ resize the smaller edge to {max(input_size)} (ensure size > crop size)"
+            f"+ color jitter (brightness={b_}, "
+            f"contrast={c_}, saturation={s_}, hue={h_})"
         )
-        strong_aug += [Resize(max(input_size), interpolation=interp_mode)]
-
-        print("+ random crop with padding=0.125 and padding_mode='reflect'")
         strong_aug += [
-            RandomCrop(
-                size=input_size,
-                padding=int(0.125 * max(input_size)),
-                padding_mode="reflect",
+            ColorJitter(
+                brightness=b_,
+                contrast=c_,
+                saturation=s_,
+                hue=h_,
             )
         ]
 
-        # 添加随机颜色抖动
-        print("+ random color jitter")
+        # 随机高斯模糊
+        gb_k, gb_p = cfg.INPUT.GB_K, cfg.INPUT.GB_P
+        print(f"+ gaussian blur (kernel={gb_k}, p={gb_p})")
+        strong_aug += [RandomApply([GaussianBlur(gb_k)], p=gb_p)]
+
+        # 随机裁剪后调整大小
+        s_ = cfg.INPUT.RRCROP_SCALE
+        print(f"+ random resized crop (size={input_size}, scale={s_})")
         strong_aug += [
-            ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1)
+            RandomResizedCrop(input_size, scale=s_, interpolation=interp_mode)
         ]
 
-        # 随机灰度
-        print("+ random grayscale")
-        strong_aug += [RandomGrayscale(p=0.2)]
-
-        # 随机模糊
-        print("+ random gaussian blur")
-        strong_aug += [RandomApply([GaussianBlur(kernel_size=3)], p=0.1)]
-
-        # 中心裁剪
-        print(f"+ {input_size[0]}x{input_size[1]} center crop")
-        strong_aug += [CenterCrop(input_size)]
-
-        # 转为Tensor
+        # 转换为张量
         print("+ to torch tensor of range [0, 1]")
         strong_aug += [ToTensor()]
 
-        # 归一化
-        print(f"+ normalization (mean={PIXEL_MEAN}, std={PIXEL_STD})")
-        strong_aug += [Normalize(mean=PIXEL_MEAN, std=PIXEL_STD)]
+        # 正则化
+        print(
+            f"+ normalization (mean={cfg.INPUT.PIXEL_MEAN}, std={cfg.INPUT.PIXEL_STD})"
+        )
+        strong_aug += [Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)]
 
         strong_aug = Compose(strong_aug)
 

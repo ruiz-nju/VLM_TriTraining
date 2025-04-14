@@ -666,6 +666,12 @@ class TrainerX(SimpleTrainer):
 
         self.before_train()
         cfg = self.cfg
+        # sample_num = len(labeled_datums) + len(unlabeled_datums)
+        # w_l = sample_num / len(labeled_datums)
+        # w_u = sample_num / len(unlabeled_datums)
+        # print(f"w_l: {w_l}")
+        # print(f"w_u: {w_u}")
+
         dataloader = build_data_loader(
             cfg,
             sampler_type=cfg.DATALOADER.TRAIN_X.SAMPLER,
@@ -676,9 +682,9 @@ class TrainerX(SimpleTrainer):
             tfm=self.dm.tfm_train,
             is_train=True,
         )
-        print(f"len(train_dataset): {len(train_dataset)}")
-        print(f"len(train_dataset) / 4: {len(train_dataset)/4}")
-        print(f"len(dataloader): {len(dataloader)}")
+        # print(f"len(train_dataset): {len(train_dataset)}")
+        # print(f"len(train_dataset) / 4: {len(train_dataset)/4}")
+        # print(f"len(dataloader): {len(dataloader)}")
 
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()

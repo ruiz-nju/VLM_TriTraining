@@ -1,5 +1,6 @@
 import argparse
 import torch
+import os
 
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
 from dassl.config import get_cfg_default
@@ -254,3 +255,4 @@ if __name__ == "__main__":
         parser.parse_args()
     )  # 解析命令行传入的参数，并将它们存储在一个命名空间对象 args 中
     main(args)
+    os._exit(0)

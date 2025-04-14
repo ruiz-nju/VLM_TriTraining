@@ -1,6 +1,8 @@
 import argparse
 import sklearn.utils
 import torch
+import os
+
 import random
 from torchvision.transforms import InterpolationMode
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
@@ -184,10 +186,6 @@ def main(args):
     cfg = setup_cfg(args, model_names)
 
     base_cfg = cfg[0]
-
-    if base_cfg.SEED >= 0:
-        print("Setting fixed seed: {}".format(base_cfg.SEED))
-        set_random_seed(base_cfg.SEED)
     setup_logger(args.output_dir)
 
     if torch.cuda.is_available() and base_cfg.USE_CUDA:
@@ -197,10 +195,17 @@ def main(args):
     # Build up models
     for i in range(3):
         print(f"----------Build up {model_names[i]}----------")
+        set_random_seed(i + 1)
         model = build_trainer(cfg[i])
         models.append(model)
+    
+    if base_cfg.SEED >= 0:
+        print("Setting fixed seed: {}".format(base_cfg.SEED))
+        set_random_seed(base_cfg.SEED)
 
     train_x, train_u, val, test = get_dataset(models[0])
+    train_x = sklearn.utils.shuffle(train_x, random_state=base_cfg.SEED)
+    train_u = sklearn.utils.shuffle(train_u, random_state=base_cfg.SEED)
     test_y = [datum.label for datum in test]
     print(f"train_x size: {len(train_x)}")
     print(f"train_u size: {len(train_u)}")
@@ -213,7 +218,7 @@ def main(args):
         for i in range(3):
             models[i].custom_load_model(load_dirs[i])
 
-        tri_trainer = Tri_Training(*models)
+        tri_trainer = Tri_Training(base_cfg, *models)
         y_pred, y_pred_each_model = tri_trainer.predict(test)
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
@@ -224,7 +229,7 @@ def main(args):
         return
     else:
         # 实例化 Tri_Training 并进行训练
-        tri_trainer = Tri_Training(*models)
+        tri_trainer = Tri_Training(base_cfg, *models)
         tri_trainer.fit(train_x, train_u)
         return
 
@@ -289,3 +294,4 @@ if __name__ == "__main__":
     )  # 解析命令行传入的参数，并将它们存储在一个命名空间对象 args 中
     args = parser.parse_args()  # 解析命令行传入的参数
     main(args)
+    # os._exit(0)
