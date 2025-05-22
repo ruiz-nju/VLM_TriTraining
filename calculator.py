@@ -29,7 +29,7 @@ def read_result(file: str):
         return None  # 直接返回 None，跳过报错
 
 
-def show_result(dataset: str):
+def get_result_base2new(dataset: str):
     dir_name = "output"
     base_dir = osp.join(
         dir_name,
@@ -43,6 +43,31 @@ def show_result(dataset: str):
         dataset,
         "shots_16/unlabeled_shots_0",
     )
+    # base_dir = osp.join(
+    #     dir_name,
+    #     "TriTraining_old/base2novel_test_base",
+    #     dataset,
+    #     "shots_16/unlabeled_shots_0",
+    # )
+    # new_dir = osp.join(
+    #     dir_name,
+    #     "TriTraining_old/base2novel_test_new",
+    #     dataset,
+    #     "shots_16/unlabeled_shots_0",
+    # )
+    # base_dir = osp.join(
+    #     dir_name,
+    #     "Vote/base2novel_test_base",
+    #     dataset,
+    #     "shots_16",
+    # )
+    # new_dir = osp.join(
+    #     dir_name,
+    #     "Vote/base2novel_test_new",
+    #     dataset,
+    #     "shots_16",
+    # )
+    
 
     base_accs = []
     new_accs = []
@@ -81,13 +106,78 @@ def show_result(dataset: str):
         avg_base = np.mean(base_accs)
         avg_new = np.mean(new_accs)
         avg_hm = np.mean(hm_accs)
+        std_base = np.std(base_accs)
+        std_new = np.std(new_accs)
+        std_hm = np.std(hm_accs)
         print(
-            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}, new: {avg_new * 100:.2f}, hm: {avg_hm * 100:.2f}"
+            f"Dataset {dataset} Average: base: {avg_base * 100:.2f} ± {std_base * 100:.2f}, new: {avg_new * 100:.2f} ± {std_new * 100:.2f}, hm: {avg_hm * 100:.2f} ± {std_hm * 100:.2f}"
         )
         return avg_base, avg_new, avg_hm
     else:
         return None, None, None
 
+def get_result_ow(dataset: str):
+    dir_name = "output"
+    base_dir = osp.join(
+        dir_name,
+        "TriTraining/base2novel_test_base",
+        dataset,
+        "shots_16/unlabeled_shots_0",
+    )
+    new_dir = osp.join(
+        dir_name,
+        "TriTraining/base2novel_test_new",
+        dataset,
+        "shots_16/unlabeled_shots_0",
+    )
+    all_dir = osp.join(
+        dir_name,
+        "TriTraining/base2novel_test_all",
+        dataset,
+        "shots_16/unlabeled_shots_0",
+    )
+    base_accs = []
+    new_accs = []
+    all_accs = []
+
+    for seed in range(1, 4):
+        try:
+            # 构建文件路径
+            base_file = osp.join(base_dir, f"seed_{seed}", "log.txt")
+            new_file = osp.join(new_dir, f"seed_{seed}", "log.txt")
+            all_file = osp.join(all_dir, f"seed_{seed}", "log.txt")
+            if check_isfile(base_file) and check_isfile(new_file) and check_isfile(all_file):
+                # 读取 Accuracy 并计算 HM
+                base_acc = read_result(base_file)
+                new_acc = read_result(new_file)
+                all_acc = read_result(all_file)
+                if base_acc is not None and new_acc is not None and all_acc is not None:
+                    base_accs.append(base_acc[0])
+                    new_accs.append(new_acc[0])
+                    all_accs.append(all_acc[0])
+
+                    # 打印单个 seed 的结果
+                    print(
+                        f"Seed {seed}: base: {base_acc[0] * 100:.2f}, new: {new_acc[0] * 100:.2f}, all: {all_acc[0] * 100:.2f}"
+                    )
+        except Exception:
+            # 静默忽略任何异常
+            continue
+
+    # 如果所有种子的结果都成功读取，计算平均值
+    if len(base_accs) == 3 and len(new_accs) == 3 and len(all_accs) == 3:
+        avg_base = np.mean(base_accs)
+        avg_new = np.mean(new_accs)
+        avg_all = np.mean(all_accs)
+        std_base = np.std(base_accs)
+        std_new = np.std(new_accs)
+        std_all = np.std(all_accs)
+        print(
+            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}±{std_base * 100:.2f}, new: {avg_new * 100:.2f}±{std_new * 100:.2f}, all: {avg_all * 100:.2f}±{std_all * 100:.2f}"
+        )
+        return avg_base, avg_new, avg_all
+    else:
+        return None, None, None
 
 def main():
     datasets = [
@@ -96,11 +186,12 @@ def main():
         "eurosat",
         "fgvc_aircraft",
         "food101",
+        "imagenet",
         "oxford_flowers",
-        "sun397",
         "oxford_pets",
-        "ucf101",
-        # "stanford_cars",
+        "stanford_cars",
+        "sun397",
+        "ucf101"
     ]
 
     all_avg_base = []
@@ -110,7 +201,7 @@ def main():
     for dataset in datasets:
         try:
             print(f"---- Dataset: {dataset} ----")
-            avg_base, avg_new, avg_hm = show_result(dataset)
+            avg_base, avg_new, avg_hm = get_result_base2new(dataset)
             if avg_base is not None and avg_new is not None and avg_hm is not None:
                 all_avg_base.append(avg_base)
                 all_avg_new.append(avg_new)
@@ -124,10 +215,49 @@ def main():
         overall_avg_base = np.mean(all_avg_base)
         overall_avg_new = np.mean(all_avg_new)
         overall_avg_hm = np.mean(all_avg_hm)
+        std_overall_base = np.std(all_avg_base)
+        std_overall_new = np.std(all_avg_new)
+        std_overall_hm = np.std(all_avg_hm)
         print(
-            f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, hm: {overall_avg_hm * 100:.2f}"
+            f"Overall Average: base: {overall_avg_base * 100:.2f}±{std_overall_base * 100:.2f}, new: {overall_avg_new * 100:.2f}±{std_overall_new * 100:.2f}, hm: {overall_avg_hm * 100:.2f}±{std_overall_hm * 100:.2f}"
         )
 
+    print("*"*40)
+    print("*"*40)
+    print("*"*40)
+    datasets = [
+        "cifar10",
+        "cifar100",
+        "imagenet100"
+    ]
+
+    all_avg_base = []
+    all_avg_new = []
+    all_avg_all = []
+
+    for dataset in datasets:
+        try:
+            print(f"---- Dataset: {dataset} ----")
+            avg_base, avg_new, avg_all = get_result_ow(dataset)
+            if avg_base is not None and avg_new is not None and avg_all is not None:
+                all_avg_base.append(avg_base)
+                all_avg_new.append(avg_new)
+                all_avg_all.append(avg_all)
+        except Exception:
+            # 静默忽略任何异常
+            continue
+
+    # 如果所有数据集都有平均值，计算整体平均值
+    if len(all_avg_base) == len(datasets):
+        overall_avg_base = np.mean(all_avg_base)
+        overall_avg_new = np.mean(all_avg_new)
+        overall_avg_all = np.mean(all_avg_all)
+        std_overall_base = np.std(all_avg_base)
+        std_overall_new = np.std(all_avg_new)
+        std_overall_all = np.std(all_avg_all)
+        print(
+            f"Overall Average: base: {overall_avg_base * 100:.2f}±{std_overall_base * 100:.2f}, new: {overall_avg_new * 100:.2f}±{std_overall_new * 100:.2f}, all: {overall_avg_all * 100:.2f}±{std_overall_all * 100:.2f}"
+        )
 
 if __name__ == "__main__":
     main()

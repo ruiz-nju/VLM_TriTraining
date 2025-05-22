@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import sklearn
 import pdb
@@ -72,7 +73,7 @@ class Tri_Training:
     def fit(self, train_x, train_u):
         num_classes = max(datum._real_label for datum in train_u) + 1
         self.min_new_label = math.ceil(num_classes / 2)
-        warm_up_epochs = 5
+        warm_up_epochs = self.cfg.TRAIN.WARMUP
         for i, model in enumerate(self.estimators):
             # 抽样
             sub_train_x = sklearn.utils.resample(train_x, replace=False, n_samples=len(train_x))
@@ -81,13 +82,16 @@ class Tri_Training:
             set_random_seed(i + 1)
             model.fit(sub_train_x, max_epoch=warm_up_epochs)
 
+
         e_prime = [0.5] * 3
-        l_prime = [0] * 3
+        l_prime = [0] * 3 
+        base, new = [0] * 3, [0] * 3
         e = [0] * 3
         update = [False] * 3
         lb_train_u, lb_y = [[]] * 3, [[]] * 3
         improve = True
         iter = 0
+        mid = (self.cfg.INPUT.BASE_CONFIDENCE_BOUND + self.cfg.INPUT.NEW_CONFIDENCE_BOUND)
 
         while improve:
             iter += 1
@@ -102,25 +106,29 @@ class Tri_Training:
                 update[i] = False
                 e[i] = self.measure_error(train_x, j, k)
 
-                if e[i] < e_prime[i]:
+                if e[i] < e_prime[i] and e_prime[i] - e[i] > e_prime[i] / 10:
                     # only mutual consistency
                     lb_train_u_mutual, lb_y_mutual = self.mutual_consistency(j, k, train_u)
                     # lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, train_u)
                     # lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, train_u)
                     # lb_train_u[i], lb_y[i] = self.merge_pseudo_labels(lb_train_u_mutual, lb_y_mutual, lb_train_u_self_j, lb_y_self_j, lb_train_u_self_k, lb_y_self_k)
                     lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, lb_train_u_mutual, lb_y_mutual)
-                    base_acc_j, new_acc_j = self.pseudo_label_acc(lb_train_u_self_j, lb_y_self_j)
-                    print(f"1基类准确度为 {base_acc_j * 100:.2f}，1新类准确度为 {new_acc_j * 100:.2f}")
+                    # base_acc_j, new_acc_j = self.pseudo_label_acc(lb_train_u_self_j, lb_y_self_j)
+                    # print(f"1基类准确度为 {base_acc_j * 100:.2f}，1新类准确度为 {new_acc_j * 100:.2f}")
                     lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, lb_train_u_mutual, lb_y_mutual)
-                    base_acc_k, new_acc_k = self.pseudo_label_acc(lb_train_u_self_k, lb_y_self_k)
-                    print(f"最终基类准确度为 {base_acc_k * 100:.2f}，最终新类准确度为 {new_acc_k * 100:.2f}")
-                    if new_acc_k > new_acc_j:
-                        lb_train_u[i], lb_y[i] = lb_train_u_self_k, lb_y_self_k 
-                    else:
-                        lb_train_u[i], lb_y[i] = lb_train_u_self_j, lb_y_self_j 
+                    # base_acc_k, new_acc_k = self.pseudo_label_acc(lb_train_u_self_k, lb_y_self_k)
+                    # print(f"最终基类准确度为 {base_acc_k * 100:.2f}，最终新类准确度为 {new_acc_k * 100:.2f}")
 
+                    if len(lb_y_self_j) > len(lb_y_self_k):
+                        tmp_train, _ = lb_train_u_self_k, lb_y_self_k 
+                    else:
+                        tmp_train, _ = lb_train_u_self_j, lb_y_self_j 
+
+                    lb_train_u[i], lb_y[i] = self.confidence_filtration(tmp_train, j, k)
+                    num_pseudo_base = sum(1 for lb in lb_y[i] if lb < self.min_new_label)
+                    num_pseudo_new = len(lb_y[i]) - num_pseudo_base
                     if l_prime[i] == 0:
-                        l_prime[i] = int(e[i] ** 3 / (e_prime[i] ** 3 - e[i] ** 3) + 1)
+                        l_prime[i] = int(e[i]  / (e_prime[i] - e[i]) + 1)
 
                     print(f"e_prime: {e_prime}")
                     print(f"l_prime: {l_prime}")
@@ -134,18 +142,27 @@ class Tri_Training:
                         print(f"该轮估计的错误样本数量: {e[i] * len(lb_y[i])}")
                         print(f"前轮估计的错误样本数量: {e_prime[i] * l_prime[i]}")
                         # 错误样本数量减少即为满足更新条件
-                        if e[i] * len(lb_y[i]) < e_prime[i] * l_prime[i]:
+                        # TODO:修改判断条件，现在的e是训练集合的误差，但是lb包含所有类别的样本。单纯相乘会导致偏差
+                        # 且模型倾向于将新类分到基类，因此将第二行换成基类会放大模型失误被，我觉得可行
+                        if int(e[i] * len(lb_y[i])) < int(e_prime[i] * l_prime[i]):
                             print(f"错误样本数量减少，更新模型 {i}")
                             update[i] = True
+                        
                         # 错误样本数量增加，但增加的数量不多
-                        elif l_prime[i] > e[i] / (e_prime[i] - e[i]):
+                        elif l_prime[i] > e[i] ** math.exp(mid) / (e_prime[i] ** math.exp(mid) - e[i] ** math.exp(mid) + 1e-12):
+                            if e[i] < 0.05:
+                                used_num = len(lb_y[i])
+                                # continue
+                            else:
+                                used_num = int((e_prime[i] / e[i]) ** math.exp(mid) * l_prime[i] - 1)
                             print(
-                                f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] / (e_prime[i] - e[i])}, 更新模型 {i}"
+                                f"错误样本数量增加, 但前轮伪标注数量大于 {e[i] ** math.exp(mid) / (e_prime[i] ** math.exp(mid) - e[i] ** math.exp(mid) + 1e-12)}, 更新模型 {i}"
                             )
                             lb_index = np.random.choice(
                                 len(lb_y[i]),
+                                # int(2 / 3 * len(lb_y[i])),
                                 min(
-                                    int((e_prime[i] / e[i]) * l_prime[i] - 1),
+                                    used_num,
                                     len(lb_y[i]),
                                 ),
                             )
@@ -167,7 +184,8 @@ class Tri_Training:
                         labeled_datums=train_x,
                         unlabeled_datums=lb_train_u[i],
                         pseudo_labels=lb_y[i],
-                        max_epoch=20,
+                        max_epoch=self.cfg.TRAIN.TRITRAINING_EPOCH,
+                        lower_bound=None
                     )
                     # 更新 e_prime 和 l_prime
                     e_prime[i] = e[i]
@@ -178,7 +196,8 @@ class Tri_Training:
             # 如果没有任何模型更新，结束循环
             if update == [False] * 3:
                 improve = False
-                print(f"TriTraining 阶段共迭代 {iter - 1} 个轮次")
+                
+        print(f"TriTraining 阶段共迭代 {iter - 1} 个轮次")
 
         # 保存三个模型
         for estimator in self.estimators:
@@ -194,34 +213,46 @@ class Tri_Training:
         # 使用未标记数据让模型 k 进行预测
         k_logits = self.estimators[k].predict(train_u)
 
-        # -------------------------------
-        # 不使用置信度过滤时的伪标签准确度统计
+        # print(j_logits.shape)
+        # print(self.min_new_label)
+
         # 直接取每个模型的最大概率预测作为伪标签
-        ulb_y_j_old = np.argmax(j_logits, axis=1)
-        ulb_y_k_old = np.argmax(k_logits, axis=1)
+        ulb_y_j = np.argmax(j_logits, axis=1)
+        ulb_y_k= np.argmax(k_logits, axis=1)
 
         # 统计两个模型预测一致的样本数量
-        consistent_mask_old = ulb_y_j_old == ulb_y_k_old
-        lb_train_u_old = [
-            train_u[idx] for idx, is_true in enumerate(consistent_mask_old) if is_true
+        consistent_mask = ulb_y_j == ulb_y_k
+        lb_train_u = [
+            train_u[idx] for idx, is_true in enumerate(consistent_mask) if is_true
         ]
-        lb_y_old = [
-            ulb_y_j_old[idx]
-            for idx, is_true in enumerate(consistent_mask_old)
+        lb_y = [
+            ulb_y_j[idx]
+            for idx, is_true in enumerate(consistent_mask)
             if is_true
         ]
-        base_acc_old, new_acc_old = self.pseudo_label_acc(lb_train_u_old, lb_y_old)
-        print(f"基于置信度筛选前，共有 {len(lb_train_u_old)} 个伪标注")
+        base_acc_old, new_acc_old = self.pseudo_label_acc(lb_train_u, lb_y)
+        print(f"基于置信度筛选前，共有 {len(lb_train_u)} 个伪标注")
         print(
             f"基类准确度为 {base_acc_old * 100:.2f}，新类准确度为 {new_acc_old * 100:.2f}"
         )
         # -------------------------------
 
-        ############################
+        return lb_train_u, lb_y
+    
+    def confidence_filtration(self, train_u, j, k):
+        print(f"模型 {j} 预测中")
+        # 使用未标记数据让模型 j 进行预测
+        j_logits = self.estimators[j].predict(train_u)
+        print(f"模型 {k} 预测中")
+        # 使用未标记数据让模型 k 进行预测
+        k_logits = self.estimators[k].predict(train_u)
+         ############################
         # add confidence bound
         ############################
-        base_confidence_bound = 0.99
-        new_confidence_bound = 0.9
+        base_confidence_bound = self.cfg.INPUT.BASE_CONFIDENCE_BOUND
+        new_confidence_bound = self.cfg.INPUT.NEW_CONFIDENCE_BOUND
+        print('基类置信度阈值:', base_confidence_bound)
+        print('新类置信度阈值:', new_confidence_bound)
         j_confidence = self.calculate_confidence(j_logits)
         k_confidence = self.calculate_confidence(k_logits)
         ulb_y_j = np.where(
@@ -258,10 +289,6 @@ class Tri_Training:
         base_acc, new_acc = self.pseudo_label_acc(lb_train_u, lb_y, print_path=False)
         print(f"基于置信度筛选后，共有 {len(lb_train_u)} 个伪标注")
         print(f"基类准确度为 {base_acc * 100:.2f}，新类准确度为 {new_acc * 100:.2f}")
-        print(f"伪标注数量减少了 {len(lb_train_u_old) - len(lb_train_u)}")
-        print(
-            f"基类准确度提高了 {(base_acc - base_acc_old) * 100:.2f}，新类准确度提高了 {(new_acc - new_acc_old)  * 100:.2f}"
-        )
         return lb_train_u, lb_y
 
     def calculate_confidence(self, logits):
@@ -298,17 +325,6 @@ class Tri_Training:
         print(f"新类伪标注数量: {num_pseudo_new}")
         print(f"真实的基类数量: {sum(1 for lb in real_labels if lb < self.min_new_label)}")
         print(f"真实的新类数量: {sum(1 for lb in real_labels if lb >= self.min_new_label)}")
-        if print_path:
-            # 输出预测错误的样本
-            paths = [datum.impath for datum in lb_train_u]  # 获取每个样本的路径
-            wrong_paths = []
-            for t in range(len(contrast)):
-                if not contrast[t]:  # 如果预测错误
-                    wrong_paths.append(paths[t])
-
-            with open('paths.txt', 'a') as f:
-                for path in wrong_paths:
-                    f.write(path + '\n')
         
         
         return base_acc, new_acc
@@ -500,16 +516,20 @@ class Tri_Training:
 
         # strong_aug = Compose(strong_aug)
 
+        # TODO:可以加上随机裁剪的概率
+
         strong_aug = []
         cfg = self.cfg
-        # 随机裁剪
-        crop_padding = cfg.INPUT.CROP_PADDING
-        print(f"+ random crop (padding = {crop_padding})")
-        strong_aug += [RandomCrop(input_size, padding=crop_padding)]
+        strong_aug += [Resize(max(input_size), interpolation=interp_mode)]
 
         # 随机水平翻转
         print("+ random flip")
         strong_aug += [RandomHorizontalFlip()]
+
+        # 随机裁剪
+        crop_padding = cfg.INPUT.CROP_PADDING
+        print(f"+ random crop (padding = {crop_padding})")
+        strong_aug += [RandomCrop(input_size, padding=crop_padding)]
 
         # 随机色彩抖动
         b_ = cfg.INPUT.COLORJITTER_B
@@ -529,17 +549,13 @@ class Tri_Training:
             )
         ]
 
+        print("+ random grayscale (p=0.2)")
+        strong_aug += [RandomGrayscale(p=0.2)]
+
         # 随机高斯模糊
         gb_k, gb_p = cfg.INPUT.GB_K, cfg.INPUT.GB_P
         print(f"+ gaussian blur (kernel={gb_k}, p={gb_p})")
         strong_aug += [RandomApply([GaussianBlur(gb_k)], p=gb_p)]
-
-        # 随机裁剪后调整大小
-        s_ = cfg.INPUT.RRCROP_SCALE
-        print(f"+ random resized crop (size={input_size}, scale={s_})")
-        strong_aug += [
-            RandomResizedCrop(input_size, scale=s_, interpolation=interp_mode)
-        ]
 
         # 转换为张量
         print("+ to torch tensor of range [0, 1]")

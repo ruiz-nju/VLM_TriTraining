@@ -1,2 +1,6 @@
 DATASET:
   NAME: "DescribableTextures"
+
+INPUT:
+  BASE_CONFIDENCE_BOUND: 0.9
+  NEW_CONFIDENCE_BOUND: 0.9

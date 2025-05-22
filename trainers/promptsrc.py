@@ -315,12 +315,15 @@ class PromptSRC(TrainerX):
         # Keep model with GPA
         self.previous_model_gpa = None
 
-    def forward_backward(self, batch):
+
+    def forward_backward(self, batch, lower_bound=None, w_l=1.0, w_u=1.0):
         image, label = self.parse_batch_train(batch)
 
         model = self.model
         optim = self.optim
         scaler = self.scaler
+
+        weights = self._get_class_weights(label, lower_bound, w_l, w_u)
 
         prec = self.cfg.TRAINER.PROMPTSRC.PREC
         if prec == "amp":
@@ -340,6 +343,7 @@ class PromptSRC(TrainerX):
                 zero_shot_logits,
                 logits,
             ) = model(image, label)
+            # loss_ce = (loss_ce * weights).mean()  # 加权平均
 
             # Calculate the L_SCL_text loss
             loss_scl_text = (
@@ -366,6 +370,17 @@ class PromptSRC(TrainerX):
                 * (1 * 1)
                 / logits.numel()
             )
+
+            # 计算 L_SCL_logits，并加权
+            # kl_per_sample = F.kl_div(
+            #     F.log_softmax(logits / 1, dim=1),
+            #     F.log_softmax(zero_shot_logits / 1, dim=1),
+            #     reduction="none",  # 逐元素损失
+            #     log_target=True,
+            # ).sum(dim=1)  # 对类别维度求和，得到每个样本的 KL 散度
+            # # 加权损失
+            # L_SCL_logits = (kl_per_sample * weights).mean()
+
             L_SCL = L_SCL_logits + loss_scl_text + loss_scl_image
             loss = loss_ce + L_SCL
             optim.zero_grad()
@@ -466,9 +481,9 @@ class PromptSRC(TrainerX):
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
 
-    def custom_load_model(self, dir):
+    def custom_load_model(self, dir, model_name="final_model.pth.tar"):
         names = self.get_model_names()
-        model_file = "final_model.pth.tar"
+        model_file = model_name
 
         for name in names:
             model_path = osp.join(dir, name, model_file)

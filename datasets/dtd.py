@@ -39,7 +39,6 @@ class DescribableTextures(DatasetBase):
                     self.split_fewshot_dir,
                     f"supervised_shot_{num_shots}-seed_{seed}.pkl",
                 )
-
                 if os.path.exists(preprocessed):
                     print(f"Loading preprocessed few-shot data from {preprocessed}")
                     with open(preprocessed, "rb") as file:
@@ -60,6 +59,7 @@ class DescribableTextures(DatasetBase):
                 )
                 super().__init__(train_x=train_x, val=val, test=test)
             elif cfg.TRAINER.STRATEGY == "semi-supervised":
+                print(11111111)
                 # 半监督学习
                 seed = cfg.SEED
                 preprocessed = os.path.join(

@@ -1,4 +1,6 @@
 import time
+import sys
+import math
 import numpy as np
 import os.path as osp
 import datetime
@@ -26,7 +28,7 @@ from dassl.evaluation import build_evaluator
 from dassl.data.transforms.transforms import build_transform
 from dassl.data.data_manager import build_data_loader
 import copy
-import pdb
+import random
 
 
 class SimpleNet(nn.Module):
@@ -419,6 +421,7 @@ class SimpleTrainer(TrainerBase):
         elapsed = round(time.time() - self.time_start)
         elapsed = str(datetime.timedelta(seconds=elapsed))
         print(f"Elapsed: {elapsed}")
+        sys.stdout.flush()
 
         # Close writer
         self.close_writer()
@@ -639,7 +642,6 @@ class TrainerX(SimpleTrainer):
         return input, label, domain
 
     # 下面全是为 TriTraining 自定义的函数
-
     # 自定义数据的 fit
     def fit(
         self,
@@ -647,6 +649,8 @@ class TrainerX(SimpleTrainer):
         unlabeled_datums=None,
         pseudo_labels=None,
         max_epoch=None,
+        lower_bound=None,
+        Save=False,
     ):
         self.reset_training_status(custom_max_epoch=max_epoch)
         assert (
@@ -657,6 +661,8 @@ class TrainerX(SimpleTrainer):
 
         if labeled_datums:
             print(f"len(labeled_datums): {len(labeled_datums)}")
+            # sample_datums = random.sample(labeled_datums, int(len(labeled_datums) * w_s))
+            # train_dataset.extend(sample_datums)
             train_dataset.extend(labeled_datums)
 
         if unlabeled_datums:
@@ -666,11 +672,6 @@ class TrainerX(SimpleTrainer):
 
         self.before_train()
         cfg = self.cfg
-        # sample_num = len(labeled_datums) + len(unlabeled_datums)
-        # w_l = sample_num / len(labeled_datums)
-        # w_u = sample_num / len(unlabeled_datums)
-        # print(f"w_l: {w_l}")
-        # print(f"w_u: {w_u}")
 
         dataloader = build_data_loader(
             cfg,
@@ -689,13 +690,18 @@ class TrainerX(SimpleTrainer):
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()
             self.custom_run_epoch(dataloader)
-            # self.after_epoch()
+            if Save and self.epoch + 1 == self.max_epoch:
+                save_dir = osp.join(
+                    self.output_dir, self.cfg.TRAINER.NAME
+                )
+                self.save_model(self.epoch, save_dir, model_name="warmup.pth.tar")
         # self.after_train()
         print("Finish training")
         # Show elapsed time
         elapsed = round(time.time() - self.time_start)
         elapsed = str(datetime.timedelta(seconds=elapsed))
         print(f"Elapsed: {elapsed}")
+        sys.stdout.flush()
 
         # Close writer
         self.close_writer()
@@ -797,3 +803,21 @@ class TrainerX(SimpleTrainer):
 
     def reset_training_status(self, custom_max_epoch=None):
         pass
+    
+    def _get_class_weights(self, labels, lower_bound, w_l=1.0, w_u=1.0):
+        """生成新类样本权重向量"""
+        if lower_bound is None:
+            return 1.0  # 不启用加权
+        
+        weights = torch.ones_like(labels, dtype=torch.float32)
+        new_class_mask = labels >= lower_bound
+        base_class_mask = labels < lower_bound
+
+        # print(f"num_new_samples: {num_new_samples}, num_base_samples: {num_base_samples}")
+
+        weights[new_class_mask] = 1.0 * w_u
+        weights[base_class_mask] = 1.0 * w_l
+        # print(weights)
+        
+        # 确保权重与损失设备一致
+        return weights.to(labels.device)

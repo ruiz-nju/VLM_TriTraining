@@ -195,7 +195,9 @@ _C.TRAIN.CHECKPOINT_FREQ = 0
 _C.TRAIN.PRINT_FREQ = 10
 # Use 'train_x', 'train_u' or 'smaller_one' to count
 # the number of iterations in an epoch (for DA and SSL)
-_C.TRAIN.COUNT_ITER = "train_x"
+# _C.TRAIN.COUNT_ITER = "train_x"
+_C.TRAIN.WARMUP = 5
+_C.TRAIN.TRITRAINING_EPOCH = 20
 
 ###########################
 # Test
@@ -220,6 +222,7 @@ _C.TEST.FINAL_MODEL = "last_step"
 ###########################
 _C.TRAINER = CN()
 _C.TRAINER.NAME = ""
+
 
 ######
 # DA

@@ -1,4 +1,3 @@
-import pdb
 import argparse
 import sklearn.utils
 import torch
@@ -39,13 +38,15 @@ import datasets.cifar100
 import datasets.imagenet100
 import trainers.coop
 import trainers.cocoop
+import trainers.tri_training
 import trainers.zsclip
 import trainers.maple
 import trainers.vpt
 import trainers.promptsrc
 import trainers.tcp
-
 from trainers.tri_training import Tri_Training
+
+import pdb
 
 
 def setup_cfg(args, model_names):
@@ -55,7 +56,7 @@ def setup_cfg(args, model_names):
     for i in range(3):
         extend_cfg(cfg[i])
         cfg[i].merge_from_file(args.dataset_config_file)
-        cfg[i].merge_from_file(f"./configs/trainers/TriTraining/{model_names[i]}.yaml")
+        cfg[i].merge_from_file(f"./configs/trainers/{model_names[i]}/vit_b16.yaml")
         cfg[i].TRAINER.PROMPTSRC.CTX_INIT = prompts[i]
         if args.root:
             cfg[i].DATASET.ROOT = args.root
@@ -78,6 +79,7 @@ def setup_cfg(args, model_names):
         if args.head:
             cfg[i].MODEL.HEAD.NAME = args.head
         cfg[i].merge_from_list(args.opts)
+        cfg[i].freeze()
     return cfg
 
 
@@ -166,7 +168,7 @@ def extend_cfg(cfg):
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
     # 训练策略可以根据需要进行调整
-    cfg.TRAINER.STRATEGY = "semi-supervised"  # supervised, semi-supervised
+    cfg.TRAINER.STRATEGY = "supervised"  # supervised, semi-supervised
 
     # 无标注数据的 shots
     cfg.DATASET.NUM_UNLABELED_SHOTS = 0
@@ -175,10 +177,10 @@ def extend_cfg(cfg):
     cfg.INPUT.BASE_CONFIDENCE_BOUND = 0.9
     cfg.INPUT.NEW_CONFIDENCE_BOUND = 0.9
 
+
 def get_dataset(model):
     return (
         model.dm.dataset.train_x,
-        model.dm.dataset.train_u,
         model.dm.dataset.val,
         model.dm.dataset.test,
     )
@@ -194,15 +196,31 @@ def main(args):
     if torch.cuda.is_available() and base_cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
 
-    model_dirs = [osp.join(cfg[i].MODEL_DIR, model_names[i]) for i in range(3)]
+    models = []
+    # Build up models
+    for i in range(3):
+        print(f"----------Build up {model_names[i]}----------")
+        set_random_seed(i + 1)
+        model = build_trainer(cfg[i])
+        models.append(model)
+    
+    if base_cfg.SEED >= 0:
+        print("Setting fixed seed: {}".format(base_cfg.SEED))
+        set_random_seed(base_cfg.SEED)
+
+    train_x, val, test = get_dataset(models[0])
+    train_x = sklearn.utils.shuffle(train_x, random_state=base_cfg.SEED)
+    test_y = [datum.label for datum in test]
+    print(f"train_x size: {len(train_x)}")
+    print(f"test size: {len(test)}")
+
     if args.eval_only:
-        models = []
+        # output/TriTraining/base2novel_train/dtd/shots_16/unlabeled_shots_0/seed_1/model_0
+        # PromptSRC
+        load_dirs = [osp.join(cfg[i].MODEL_DIR, model_names[i]) for i in range(3)]
         for i in range(3):
-            model = build_trainer(cfg[i])
-            model.custom_load_model(model_dirs[i])
-            models.append(model)
-        train_x, train_u, val, test = get_dataset(models[0])
-        test_y = [datum._real_label for datum in test]
+            models[i].custom_load_model(load_dirs[i])
+
         tri_trainer = Tri_Training(base_cfg, *models)
         y_pred, y_pred_each_model = tri_trainer.predict(test)
         # 计算准确度
@@ -214,30 +232,13 @@ def main(args):
         sys.stdout.flush()
         return
     else:
-        print("----------Stage: Traditional warmup stage----------")
-        models = []
-        # Build up models
-        for i in range(3):
-            print(f"----------Build up {model_names[i]}----------")
-            set_random_seed(i + 1)
-            model = build_trainer(cfg[i])
-            models.append(model)
-    
-        if base_cfg.SEED >= 0:
-            print("Setting fixed seed: {}".format(base_cfg.SEED))
-            set_random_seed(base_cfg.SEED)
-
-        train_x, train_u, val, test = get_dataset(models[0])
-        train_x = sklearn.utils.shuffle(train_x, random_state=base_cfg.SEED)
-        train_u = sklearn.utils.shuffle(train_u, random_state=base_cfg.SEED)
-        test_y = [datum.label for datum in test]
-        print(f"train_x size: {len(train_x)}")
-        print(f"train_u size: {len(train_u)}")
-        print(f"test size: {len(test)}")
-        tri_trainer = Tri_Training(base_cfg, *models)
-        tri_trainer.fit(train_x, train_u)
-        sys.stdout.flush()
-
+        # # 实例化 Tri_Training 并进行训练
+        # tri_trainer = Tri_Training(base_cfg, *models)
+        # tri_trainer.fit(train_x, train_u)
+        # return
+        for model in models:
+            model.fit(train_x)
+            model.custom_save_model()
 
 if __name__ == "__main__":
     parser = (

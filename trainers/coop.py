@@ -119,22 +119,6 @@ class PromptLearner(nn.Module):
         name_lens = [len(_tokenizer.encode(name)) for name in classnames]
         prompts = [prompt_prefix + " " + name + "." for name in classnames]
 
-        # print(prompts[0])  # X X X X X X X X X X X X X X X X face.
-        # print(len(prompts))  # 100
-        # pdb.set_trace()
-
-        # print(clip.tokenize(prompts[0]))
-        # # tensor([[49406,   343,   343,   343,   343,   343,   343,   343,   343,   343,
-        # #            343,   343,   343,   343,   343,   343,   343,  1710,   269, 49407,
-        # #              0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-        # #              0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-        # #              0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-        # #              0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-        # #              0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-        # #              0,     0,     0,     0,     0,     0,     0]])
-        # print(clip.tokenize(prompts[0]).shape)  # torch.Size([1, 77])
-        # pdb.set_trace()
-
         tokenized_prompts = torch.cat([clip.tokenize(p) for p in prompts])
         # print(tokenized_prompts.shape)  # torch.Size([100, 77])
         # pdb.set_trace()
@@ -303,7 +287,7 @@ class CoOp(TrainerX):
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.model = nn.DataParallel(self.model)
 
-    def forward_backward(self, batch):
+    def forward_backward(self, batch, lower_bound=None, w_l=1.0, w_u=1.0):
         image, label = self.parse_batch_train(batch)
         prec = self.cfg.TRAINER.COOP.PREC
         if prec == "amp":
@@ -396,3 +380,18 @@ class CoOp(TrainerX):
             print("Loading weights to {} " 'from "{}")'.format(name, model_path))
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
+
+    def reset_training_status(self, custom_max_epoch=None):
+        self.start_epoch = self.epoch = 0
+        if custom_max_epoch is not None:
+            self.max_epoch = custom_max_epoch
+
+        self.optim = build_optimizer(self.model, self.cfg.OPTIM)
+        self.sched = build_lr_scheduler(self.optim, self.cfg.OPTIM)
+        self._optims["prompt_learner"] = self.optim
+        self._scheds["prompt_learner"] = self.sched
+
+        self.scaler = GradScaler() if self.cfg.TRAINER.COOP.PREC == "amp" else None
+
+        print("CoOp's training status has been reset.")
+        

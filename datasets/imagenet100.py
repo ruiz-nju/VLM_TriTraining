@@ -4,16 +4,14 @@ from collections import OrderedDict
 
 from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import listdir_nohidden, mkdir_if_missing
-from collections import defaultdict
-import random
-from tqdm import tqdm
+
 from .oxford_pets import OxfordPets
 
 
 @DATASET_REGISTRY.register()
-class ImageNet(DatasetBase):
+class ImageNet100(DatasetBase):
 
-    dataset_dir = "imagenet"
+    dataset_dir = "imagenet-100"
 
     def __init__(self, cfg):
         root = os.path.abspath(os.path.expanduser(cfg.DATASET.ROOT))
@@ -46,7 +44,7 @@ class ImageNet(DatasetBase):
             if cfg.TRAINER.STRATEGY == "supervised":
                 seed = cfg.SEED
                 preprocessed = os.path.join(
-                    self.split_fewshot_dir, f"supervised_shot_{num_shots}-seed_{seed}.pkl"
+                    self.split_fewshot_dir, f"shot_{num_shots}-seed_{seed}.pkl"
                 )
 
                 if os.path.exists(preprocessed):
@@ -63,12 +61,12 @@ class ImageNet(DatasetBase):
 
                 subsample = cfg.DATASET.SUBSAMPLE_CLASSES
                 train, test = OxfordPets.subsample_classes(train, test, subsample=subsample)
+
                 super().__init__(train_x=train, val=test, test=test)
             elif cfg.TRAINER.STRATEGY == "semi-supervised":
                 seed = cfg.SEED
                 preprocessed = os.path.join(
-                    self.split_fewshot_dir,
-                    f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabeled_shots}-seed_{seed}.pkl",
+                    self.split_fewshot_dir, f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabeled_shots}-seed_{seed}.pkl"
                 )
 
                 if os.path.exists(preprocessed):
@@ -90,37 +88,10 @@ class ImageNet(DatasetBase):
                         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
                 subsample = cfg.DATASET.SUBSAMPLE_CLASSES
                 train_x, test = OxfordPets.subsample_classes(train_x, test, subsample=subsample)
-
+                
                 # 去除重复的数据
                 train_x_impath = [item.impath for item in train_x]
-                # train_u = [item for item in train_u if item.impath not in train_x_impath]
-
-                # 取少量数据
-                ratio = 0.005
-                print(f"train_u 中每个类别取 {ratio * 100}% 的数据")
-                num_old_train_u = len(train_u)
-                # 按标签分组
-                label_groups = defaultdict(list)
-                for item in tqdm(train_u, desc="按标签分组"):
-                    label_groups[item.label].append(item)
-                new_train_u = []
-                for label, items in tqdm(label_groups.items(), desc="处理每个类别"):
-                    # 去除重复的数据
-                    items = [item for item in items if item.impath not in train_x_impath]
-                    n_total = len(items)
-                    if n_total == 0:
-                        continue
-                    n_select = int(ratio * n_total)
-                    if n_select == 0:
-                        n_select = 1
-                    n_select = min(n_select, n_total)
-                    # 随机抽样
-                    selected = random.sample(items, n_select)
-                    new_train_u.extend(selected)
-                train_u = new_train_u
-                num_new_train_u = len(train_u)
-                print(f"num_old_train_u: {num_old_train_u}, num_new_train_u: {num_new_train_u}")
-
+                train_u = [item for item in train_u if item.impath not in train_x_impath]
                 super().__init__(
                     train_x=train_x, train_u=train_u, val=test, test=test, cfg=cfg
                 )

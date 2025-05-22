@@ -93,7 +93,7 @@ class CIFAR10(DatasetBase):
         return items
 
 
-@DATASET_REGISTRY.register()
+# @DATASET_REGISTRY.register()
 class CIFAR100(CIFAR10):
     """CIFAR100 for SSL.
 
