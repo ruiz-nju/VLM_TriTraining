@@ -29,6 +29,7 @@ import trainers.cocoop
 import trainers.zsclip
 import trainers.maple
 import trainers.vpt
+import trainers.promptsrc   
 import pdb
 
 
@@ -79,27 +80,16 @@ def reset_cfg(cfg, args):
 
 
 def extend_cfg(cfg):
-    """
-    Add new config variables.
-
-    E.g.
-        from yacs.config import CfgNode as CN
-        cfg.TRAINER.MY_MODEL = CN()
-        cfg.TRAINER.MY_MODEL.PARAM_A = 1.
-        cfg.TRAINER.MY_MODEL.PARAM_B = 0.5
-        cfg.TRAINER.MY_MODEL.PARAM_C = False
-    """
-    cfg.TRAINER.MODAL = "base2novel"  # 默认的实验模式为base2novel
-
+    cfg.TRAINER.MODAL = "classification"
     from yacs.config import CfgNode as CN
 
     # Config for CoOp
-    cfg.TRAINER.COOP = (
-        CN()
-    )  # 创建一个可用于配置的字典节点，可以看作是一个增强版的 Python 字典，持层次化配置和递归嵌套
+    cfg.TRAINER.COOP = CN()
+    cfg.TRAINER.COOP.ALPHA = 1.0
     cfg.TRAINER.COOP.N_CTX = 16  # number of context vectors
     cfg.TRAINER.COOP.CSC = False  # class-specific context
-    cfg.TRAINER.COOP.CTX_INIT = ""  # initialization words
+    cfg.TRAINER.COOP.CTX_INIT = False  # initialization words
+    cfg.TRAINER.COOP.W = 1.0
     cfg.TRAINER.COOP.PREC = "fp16"  # fp16, fp32, amp
     cfg.TRAINER.COOP.CLASS_TOKEN_POSITION = "end"  # 'middle' or 'end' or 'front'
 
@@ -126,12 +116,62 @@ def extend_cfg(cfg):
     cfg.TRAINER.VPT.PROMPT_DEPTH_VISION = (
         1  # if set to 1, will represent shallow vision prompting only
     )
+    # Config for independent Vision Language prompting (independent-vlp)
+    cfg.TRAINER.IVLP = CN()
+    cfg.TRAINER.IVLP.N_CTX_VISION = 2  # number of context vectors at the vision branch
+    cfg.TRAINER.IVLP.N_CTX_TEXT = 2  # number of context vectors at the language branch
+    cfg.TRAINER.IVLP.CTX_INIT = (
+        "a photo of a"  # initialization words (only for language prompts)
+    )
+    cfg.TRAINER.IVLP.PREC = "fp16"  # fp16, fp32, amp
+    # If both variables below are set to 0, 0, will the config will degenerate to COOP model
+    cfg.TRAINER.IVLP.PROMPT_DEPTH_VISION = (
+        9  # Max 12, minimum 0, for 0 it will act as shallow IVLP prompting (J=1)
+    )
+    cfg.TRAINER.IVLP.PROMPT_DEPTH_TEXT = (
+        9  # Max 12, minimum 0, for 0 it will act as shallow IVLP prompting(J=1)
+    )
+
+    # Config for PromptSRC
+    cfg.TRAINER.PROMPTSRC = CN()
+    cfg.TRAINER.PROMPTSRC.N_CTX_VISION = (
+        4  # number of context vectors at the vision branch
+    )
+    cfg.TRAINER.PROMPTSRC.N_CTX_TEXT = (
+        4  # number of context vectors at the language branch
+    )
+    cfg.TRAINER.PROMPTSRC.CTX_INIT = "a photo of a"  # initialization words
+    cfg.TRAINER.PROMPTSRC.PREC = "fp16"  # fp16, fp32, amp
+    cfg.TRAINER.PROMPTSRC.PROMPT_DEPTH_VISION = (
+        9  # Max 12, minimum 0, for 0 it will be using shallow IVLP prompting (J=1)
+    )
+    cfg.TRAINER.PROMPTSRC.PROMPT_DEPTH_TEXT = (
+        9  # Max 12, minimum 0, for 0 it will be using shallow IVLP prompting (J=1)
+    )
+    cfg.TRAINER.PROMPTSRC.TEXT_LOSS_WEIGHT = 25
+    cfg.TRAINER.PROMPTSRC.IMAGE_LOSS_WEIGHT = 10
+    cfg.TRAINER.PROMPTSRC.GPA_MEAN = 15
+    cfg.TRAINER.PROMPTSRC.GPA_STD = 1
+
+    cfg.LOSS = CN()
+    cfg.LOSS.GM = False
+    cfg.LOSS.NAME = ""
+    cfg.LOSS.ALPHA = 0.0
+    cfg.LOSS.T = 1.0
+    cfg.LOSS.LAMBDA = 1.0
 
     # 默认的采样设置为 all，可以根据需要进行调整
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
-    # 默认的训练策略为 supervised，可以根据需要进行调整
+    # 训练策略可以根据需要进行调整
     cfg.TRAINER.STRATEGY = "supervised"  # supervised, semi-supervised
+
+    # 无标注数据的 shots
+    cfg.DATASET.NUM_UNLABELED_SHOTS = 0
+
+    cfg.TRAIN_OR_TEST = "train"
+    cfg.INPUT.BASE_CONFIDENCE_BOUND = 0.9
+    cfg.INPUT.NEW_CONFIDENCE_BOUND = 0.9
 
 
 def setup_cfg(args):

@@ -96,7 +96,7 @@ class ImageNet(DatasetBase):
                 # train_u = [item for item in train_u if item.impath not in train_x_impath]
 
                 # 取少量数据
-                ratio = 0.005
+                ratio = 0.05
                 print(f"train_u 中每个类别取 {ratio * 100}% 的数据")
                 num_old_train_u = len(train_u)
                 # 按标签分组

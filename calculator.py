@@ -110,7 +110,7 @@ def get_result_base2new(dataset: str):
         std_new = np.std(new_accs)
         std_hm = np.std(hm_accs)
         print(
-            f"Dataset {dataset} Average: base: {avg_base * 100:.2f} ± {std_base * 100:.2f}, new: {avg_new * 100:.2f} ± {std_new * 100:.2f}, hm: {avg_hm * 100:.2f} ± {std_hm * 100:.2f}"
+            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}, new: {avg_new * 100:.2f}, hm: {avg_hm * 100:.2f}"
         )
         return avg_base, avg_new, avg_hm
     else:
@@ -173,7 +173,7 @@ def get_result_ow(dataset: str):
         std_new = np.std(new_accs)
         std_all = np.std(all_accs)
         print(
-            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}±{std_base * 100:.2f}, new: {avg_new * 100:.2f}±{std_new * 100:.2f}, all: {avg_all * 100:.2f}±{std_all * 100:.2f}"
+            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}, new: {avg_new * 100:.2f}, all: {avg_all * 100:.2f}"
         )
         return avg_base, avg_new, avg_all
     else:
@@ -181,17 +181,17 @@ def get_result_ow(dataset: str):
 
 def main():
     datasets = [
-        "caltech101",
+        # "caltech101",
         "dtd",
-        "eurosat",
-        "fgvc_aircraft",
+        # "eurosat",
+        # "fgvc_aircraft",
         "food101",
         "imagenet",
-        "oxford_flowers",
+        # "oxford_flowers",
         "oxford_pets",
-        "stanford_cars",
-        "sun397",
-        "ucf101"
+        # "stanford_cars",
+        # "sun397",
+        # "ucf101"
     ]
 
     all_avg_base = []
@@ -219,14 +219,14 @@ def main():
         std_overall_new = np.std(all_avg_new)
         std_overall_hm = np.std(all_avg_hm)
         print(
-            f"Overall Average: base: {overall_avg_base * 100:.2f}±{std_overall_base * 100:.2f}, new: {overall_avg_new * 100:.2f}±{std_overall_new * 100:.2f}, hm: {overall_avg_hm * 100:.2f}±{std_overall_hm * 100:.2f}"
+            f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, hm: {overall_avg_hm * 100:.2f}"
         )
 
     print("*"*40)
     print("*"*40)
     print("*"*40)
     datasets = [
-        "cifar10",
+        # "cifar10",
         "cifar100",
         "imagenet100"
     ]
@@ -256,7 +256,7 @@ def main():
         std_overall_new = np.std(all_avg_new)
         std_overall_all = np.std(all_avg_all)
         print(
-            f"Overall Average: base: {overall_avg_base * 100:.2f}±{std_overall_base * 100:.2f}, new: {overall_avg_new * 100:.2f}±{std_overall_new * 100:.2f}, all: {overall_avg_all * 100:.2f}±{std_overall_all * 100:.2f}"
+            f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, all: {overall_avg_all * 100:.2f}"
         )
 
 if __name__ == "__main__":

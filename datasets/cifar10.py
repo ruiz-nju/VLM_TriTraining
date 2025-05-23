@@ -24,7 +24,7 @@ class CIFAR10(DatasetBase):
         if os.path.exists(self.split_path):
             train, val, test = OxfordPets.read_split(self.split_path, self.dataset_dir)
         else:
-            train, val, test = DTD.read_data(self.dataset_dir)
+            train, val, test = DTD.read_and_split_data(self.dataset_dir)
             OxfordPets.save_split(train, val, test, self.split_path, self.dataset_dir)
 
         num_shots = cfg.DATASET.NUM_SHOTS
