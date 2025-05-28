@@ -1,6 +1,7 @@
 import argparse
 import torch
 import os
+import sys
 
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
 from dassl.config import get_cfg_default
@@ -22,7 +23,9 @@ import datasets.imagenet_sketch
 import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
-
+import datasets.cifar10
+import datasets.cifar100
+import datasets.imagenet100
 
 import trainers.coop
 import trainers.cocoop
@@ -222,6 +225,7 @@ def main(args):
     if args.eval_only:
         trainer.load_model(args.model_dir, epoch=args.load_epoch)
         trainer.test()
+        sys.stdout.flush()
         return
 
     if not args.no_train:

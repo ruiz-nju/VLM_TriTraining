@@ -37,6 +37,7 @@ import datasets.imagenet_a
 import datasets.imagenet_r
 import datasets.cifar10
 import datasets.cifar100
+import datasets.stl10
 import datasets.imagenet100
 import trainers.coop
 import trainers.cocoop
@@ -216,7 +217,6 @@ def main(args):
         sys.stdout.flush()
         return
     else:
-        print("----------Stage: Traditional warmup stage----------")
         models = []
         # Build up models
         for i in range(3):

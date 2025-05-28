@@ -122,6 +122,8 @@ class DatasetBase:
         """
         label_set = set()
         for item in data_source:
+            if item.label == -1:
+                continue
             label_set.add(item.label)
         return max(label_set) - min(label_set) + 1
 
@@ -134,6 +136,8 @@ class DatasetBase:
         """
         container = set()
         for item in data_source:
+            if item.label == -1:
+                continue
             container.add((item.label, item.classname))
         mapping = {label: classname for label, classname in container}
         labels = list(mapping.keys())

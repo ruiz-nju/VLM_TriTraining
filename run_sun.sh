@@ -1,9 +1,9 @@
-DEVICE=3
-
-for dataset in oxford_pets
+DEVICE=0
+# caltech101 dtd fgvc_aircraft
+for dataset in sun397
 do 
     for seed in 1 2 3
-    do
+    do 
         sh scripts/tritraining/base2novel_train_new.sh $dataset 16 0 $seed $DEVICE
         sh scripts/tritraining/base2novel_test_base.sh $dataset 16 0 $seed $DEVICE
         sh scripts/tritraining/base2novel_test_new.sh $dataset 16 0 $seed $DEVICE

@@ -136,6 +136,24 @@ def get_result_ow(dataset: str):
         dataset,
         "shots_16/unlabeled_shots_0",
     )
+    # base_dir = osp.join(
+    #     dir_name,
+    #     "Vote/base2novel_test_base",
+    #     dataset,
+    #     "shots_16",
+    # )
+    # new_dir = osp.join(
+    #     dir_name,
+    #     "Vote/base2novel_test_new",
+    #     dataset,
+    #     "shots_16",
+    # )
+    # all_dir = osp.join(
+    #     dir_name,
+    #     "Vote/base2novel_test_all",
+    #     dataset,
+    #     "shots_16",
+    # )
     base_accs = []
     new_accs = []
     all_accs = []
@@ -178,19 +196,62 @@ def get_result_ow(dataset: str):
         return avg_base, avg_new, avg_all
     else:
         return None, None, None
+    
+def get_result_ssl(dataset: str):
+    if dataset == "cifar10":
+        num_shots = [4, 25, 400]
+    else:
+        num_shots = [4, 25, 100]
+    for num_shot in num_shots:
+        print(f"[Num Shots: {num_shot}]:", end=" ")
+        dir_name = "output"
+        dir = osp.join(dir_name, "TriTraining/ssl_test", dataset, f"shots_{num_shot}/unlabeled_shots_0")
+        accs = []
+
+        for seed in range(1, 4):
+            try:
+                # 构建文件路径
+                file = osp.join(dir, f"seed_{seed}", "log.txt")
+                if check_isfile(file):
+                    # 读取 Accuracy 并计算 HM
+                    acc = read_result(file)
+                    if acc is not None:
+                        accs.append(acc[0])
+                        # 打印单个 seed 的结果
+                        print(
+                            f"Seed {seed}: acc: {acc[0] * 100:.2f}", end=" "
+                        )
+            except Exception:
+                # 静默忽略任何异常
+                continue
+
+        # 如果所有种子的结果都成功读取，计算平均值
+        if len(accs) == 3:
+            avg_acc = np.mean(accs)
+            std_acc = np.std(accs)
+            print(
+                f"Average: acc: {avg_acc * 100:.2f}±{std_acc * 100:.2f}"
+            )
+        else:
+            print(
+                f"Average: acc: Nan"
+            )
 
 def main():
+    print("*"*40)
+    print("Base2New")
+    print("*"*40)
     datasets = [
         # "caltech101",
-        "dtd",
+        # "dtd",
         # "eurosat",
         # "fgvc_aircraft",
+        # "imagenet",
         "food101",
-        "imagenet",
         # "oxford_flowers",
         "oxford_pets",
         # "stanford_cars",
-        # "sun397",
+        "sun397",
         # "ucf101"
     ]
 
@@ -222,11 +283,12 @@ def main():
             f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, hm: {overall_avg_hm * 100:.2f}"
         )
 
+    print("\n\n")
     print("*"*40)
-    print("*"*40)
+    print("OW")
     print("*"*40)
     datasets = [
-        # "cifar10",
+        "cifar10",
         "cifar100",
         "imagenet100"
     ]
@@ -258,6 +320,27 @@ def main():
         print(
             f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, all: {overall_avg_all * 100:.2f}"
         )
+    
+    print("\n\n")
+    print("*"*40)
+    print("SSL")
+    print("*"*40)
+    datasets = [
+        # "cifar10",
+        "cifar100",
+        # "stl10",
+        "imagenet"
+    ]
+
+    for dataset in datasets:
+        try:
+            print(f"---- Dataset: {dataset} ----")
+            _ = get_result_ssl(dataset)
+        except Exception:
+            # 静默忽略任何异常
+            continue
+
+
 
 if __name__ == "__main__":
     main()

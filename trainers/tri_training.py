@@ -24,7 +24,7 @@ from torchvision.transforms import (
 )
 from dassl.utils import set_random_seed
 from torchvision.transforms.functional import InterpolationMode
-
+from collections import Counter
 
 class Tri_Training:
     def __init__(self, cfg, base_estimator_1, base_estimator_2, base_estimator_3):
@@ -70,29 +70,33 @@ class Tri_Training:
 
         return error_rate
 
-    def fit(self, train_x, train_u):
+    def fit(self, train_x, train_u, Warmuped=False):
         num_classes = max(datum._real_label for datum in train_u) + 1
-        self.min_new_label = math.ceil(num_classes / 2)
+        if self.cfg.TRAINER.MODAL == "base2novel":
+            self.min_new_label = math.ceil(num_classes / 2)
         warm_up_epochs = self.cfg.TRAIN.WARMUP
-        for i, model in enumerate(self.estimators):
-            # 抽样
-            sub_train_x = sklearn.utils.resample(train_x, replace=False, n_samples=len(train_x))
-            print(f"------------Tritraining is fitting estimator: {i}------------")
-            print(f"Training model {i} for {warm_up_epochs} epochs")
-            set_random_seed(i + 1)
-            model.fit(sub_train_x, max_epoch=warm_up_epochs)
+        if not Warmuped:
+            for i, model in enumerate(self.estimators):
+                # 抽样
+                sub_train_x = sklearn.utils.resample(train_x, replace=False, n_samples=len(train_x))
+                print(f"------------Tritraining is fitting estimator: {i}------------")
+                print(f"Training model {i} for {warm_up_epochs} epochs")
+                set_random_seed(i + 1)
+                model.fit(sub_train_x, max_epoch=warm_up_epochs)
+            
 
-
+        set_random_seed(self.cfg.SEED)
         e_prime = [0.5] * 3
         l_prime = [0] * 3 
-        base, new = [0] * 3, [0] * 3
         e = [0] * 3
         update = [False] * 3
         lb_train_u, lb_y = [[]] * 3, [[]] * 3
         improve = True
         iter = 0
-        mid = (self.cfg.INPUT.BASE_CONFIDENCE_BOUND + self.cfg.INPUT.NEW_CONFIDENCE_BOUND)
-
+        if self.cfg.TRAINER.MODAL == "base2novel":
+            mid = (self.cfg.INPUT.BASE_CONFIDENCE_BOUND + self.cfg.INPUT.NEW_CONFIDENCE_BOUND)
+        elif self.cfg.TRAINER.MODAL == "ssl":
+            mid  = self.cfg.INPUT.CONFIDENCE_BOUND
         while improve:
             iter += 1
             print(f"------------------------iteration: {iter}------------------------")
@@ -105,28 +109,30 @@ class Tri_Training:
                 j, k = np.delete(np.array([0, 1, 2]), i)
                 update[i] = False
                 e[i] = self.measure_error(train_x, j, k)
+                if e[i] < 0.025 and Warmuped:
+                    print(f"模型 {i} 的错误率小于 0.025, 跳过更新")
+                    continue
 
                 if e[i] < e_prime[i] and e_prime[i] - e[i] > e_prime[i] / 10:
                     # only mutual consistency
                     lb_train_u_mutual, lb_y_mutual = self.mutual_consistency(j, k, train_u)
-                    # lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, train_u)
-                    # lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, train_u)
-                    # lb_train_u[i], lb_y[i] = self.merge_pseudo_labels(lb_train_u_mutual, lb_y_mutual, lb_train_u_self_j, lb_y_self_j, lb_train_u_self_k, lb_y_self_k)
                     lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, lb_train_u_mutual, lb_y_mutual)
-                    # base_acc_j, new_acc_j = self.pseudo_label_acc(lb_train_u_self_j, lb_y_self_j)
-                    # print(f"1基类准确度为 {base_acc_j * 100:.2f}，1新类准确度为 {new_acc_j * 100:.2f}")
                     lb_train_u_self_k, lb_y_self_k = self.self_consistency(k, lb_train_u_mutual, lb_y_mutual)
-                    # base_acc_k, new_acc_k = self.pseudo_label_acc(lb_train_u_self_k, lb_y_self_k)
-                    # print(f"最终基类准确度为 {base_acc_k * 100:.2f}，最终新类准确度为 {new_acc_k * 100:.2f}")
 
+                    # 选择数量少的作为伪标签
                     if len(lb_y_self_j) > len(lb_y_self_k):
                         tmp_train, _ = lb_train_u_self_k, lb_y_self_k 
                     else:
                         tmp_train, _ = lb_train_u_self_j, lb_y_self_j 
 
+                    # 基于置信度筛选伪标签
                     lb_train_u[i], lb_y[i] = self.confidence_filtration(tmp_train, j, k)
-                    num_pseudo_base = sum(1 for lb in lb_y[i] if lb < self.min_new_label)
-                    num_pseudo_new = len(lb_y[i]) - num_pseudo_base
+                    class_counts = Counter(lb_y[i])
+
+                    # 打印结果
+                    # print("类别统计：")
+                    # for class_label, count in class_counts.items():
+                    #     print(f"类别 {class_label}: {count} 个")
                     if l_prime[i] == 0:
                         l_prime[i] = int(e[i]  / (e_prime[i] - e[i]) + 1)
 
@@ -176,10 +182,11 @@ class Tri_Training:
                     print(f"----------------模型 {i} 正在被更新----------------")
                     # 将标记数据集与新标记的未标记样本合并，并重新训练模型
                     print(f"为模型 {i} 添加了 {len(lb_y[i])} 个新标记样本")
-                    num_base_label = sum(1 for lb in lb_y[i] if lb < self.min_new_label)
-                    num_new_label = sum(1 for lb in lb_y[i] if lb >= self.min_new_label)
-                    print(f"划分到基类中的样本数量: {num_base_label}")
-                    print(f"划分到新类中的样本数量: {num_new_label}")
+                    if self.cfg.TRAINER.MODAL == "base2novel":
+                        num_base_label = sum(1 for lb in lb_y[i] if lb < self.min_new_label)
+                        num_new_label = sum(1 for lb in lb_y[i] if lb >= self.min_new_label)
+                        print(f"划分到基类中的样本数量: {num_base_label}")
+                        print(f"划分到新类中的样本数量: {num_new_label}")
                     self.estimators[i].fit(
                         labeled_datums=train_x,
                         unlabeled_datums=lb_train_u[i],
@@ -213,9 +220,6 @@ class Tri_Training:
         # 使用未标记数据让模型 k 进行预测
         k_logits = self.estimators[k].predict(train_u)
 
-        # print(j_logits.shape)
-        # print(self.min_new_label)
-
         # 直接取每个模型的最大概率预测作为伪标签
         ulb_y_j = np.argmax(j_logits, axis=1)
         ulb_y_k= np.argmax(k_logits, axis=1)
@@ -230,16 +234,14 @@ class Tri_Training:
             for idx, is_true in enumerate(consistent_mask)
             if is_true
         ]
-        base_acc_old, new_acc_old = self.pseudo_label_acc(lb_train_u, lb_y)
-        print(f"基于置信度筛选前，共有 {len(lb_train_u)} 个伪标注")
-        print(
-            f"基类准确度为 {base_acc_old * 100:.2f}，新类准确度为 {new_acc_old * 100:.2f}"
-        )
+        print(f"互一致性伪标注准确度情况:")
+        self.pseudo_label_acc(lb_train_u, lb_y)
         # -------------------------------
 
         return lb_train_u, lb_y
     
     def confidence_filtration(self, train_u, j, k):
+        print(f"基于置信度筛选伪标签")
         print(f"模型 {j} 预测中")
         # 使用未标记数据让模型 j 进行预测
         j_logits = self.estimators[j].predict(train_u)
@@ -286,9 +288,8 @@ class Tri_Training:
         ]
         lb_y = [ulb_y_j[idx] for idx, is_true in enumerate(consistent_mask) if is_true]
         # lb_y = np.array([train_u[idx]._real_label for idx, is_true in enumerate(consistent_mask) if is_true])        
-        base_acc, new_acc = self.pseudo_label_acc(lb_train_u, lb_y, print_path=False)
-        print(f"基于置信度筛选后，共有 {len(lb_train_u)} 个伪标注")
-        print(f"基类准确度为 {base_acc * 100:.2f}，新类准确度为 {new_acc * 100:.2f}")
+        print(f"基于置信度筛选后的伪标注准确度情况:")
+        self.pseudo_label_acc(lb_train_u, lb_y)
         return lb_train_u, lb_y
 
     def calculate_confidence(self, logits):
@@ -298,37 +299,49 @@ class Tri_Training:
         confidence = 1 - entropy(logits, axis=1) / np.log(logits.shape[1])
         return confidence
 
-    def pseudo_label_acc(self, lb_train_u, lb_y, print_path=False):
-        ############
-        # 查看伪标签的精准度
-        num_pseudo_base = sum(1 for lb in lb_y if lb < self.min_new_label)
-        num_pseudo_new = sum(1 for lb in lb_y if lb >= self.min_new_label)
-        real_labels = [datum._real_label for datum in lb_train_u]
-        contrast = np.array(real_labels) == np.array(lb_y)
-        base_acc = (
-            sum(
-                1
-                for t in range(len(contrast))
-                if contrast[t] and lb_y[t] < self.min_new_label
+    def pseudo_label_acc(self, lb_train_u, lb_y, modal="ssl"):
+        if self.cfg.DATASET.NAME == "STL10":
+            print(f"当前运行数据集为STL10, 无法查看伪标签准确度")
+            print(f"共有 {len(lb_train_u)} 个伪标注")
+            return
+        if modal == "ssl":
+            real_labels = [datum._real_label for datum in lb_train_u]
+            contrast = np.array(real_labels) == np.array(lb_y)
+            acc = sum(contrast) / len(contrast) if len(contrast) != 0 else 0
+            print(f"共有 {len(lb_train_u)} 个伪标注")
+            print(f"准确度为 {acc * 100:.2f}")
+        elif modal == "base2novel":
+            ############
+            # 查看伪标签的精准度
+            num_pseudo_base = sum(1 for lb in lb_y if lb < self.min_new_label)
+            num_pseudo_new = sum(1 for lb in lb_y if lb >= self.min_new_label)
+            real_labels = [datum._real_label for datum in lb_train_u]
+            contrast = np.array(real_labels) == np.array(lb_y)
+            base_acc = (
+                sum(
+                    1
+                    for t in range(len(contrast))
+                    if contrast[t] and lb_y[t] < self.min_new_label
+                )
+                / num_pseudo_base if num_pseudo_base != 0 else 0
             )
-            / num_pseudo_base if num_pseudo_base != 0 else 0
-        )
-        new_acc = (
-            sum(
-                1
-                for t in range(len(contrast))
-                if contrast[t] and lb_y[t] >= self.min_new_label
+            new_acc = (
+                sum(
+                    1
+                    for t in range(len(contrast))
+                    if contrast[t] and lb_y[t] >= self.min_new_label
+                )
+                / num_pseudo_new if num_pseudo_new != 0 else 0
             )
-            / num_pseudo_new if num_pseudo_new != 0 else 0
-        )
-        print(f"基类伪标注数量: {num_pseudo_base}")
-        print(f"新类伪标注数量: {num_pseudo_new}")
-        print(f"真实的基类数量: {sum(1 for lb in real_labels if lb < self.min_new_label)}")
-        print(f"真实的新类数量: {sum(1 for lb in real_labels if lb >= self.min_new_label)}")
-        
-        
-        return base_acc, new_acc
-        #############
+            print(f"共有 {len(lb_train_u)} 个伪标注")
+            print(f"基类伪标注数量: {num_pseudo_base}")
+            print(f"新类伪标注数量: {num_pseudo_new}")
+            print(f"真实的基类数量: {sum(1 for lb in real_labels if lb < self.min_new_label)}")
+            print(f"真实的新类数量: {sum(1 for lb in real_labels if lb >= self.min_new_label)}")
+            print(
+                f"基类准确度为 {base_acc * 100:.2f}，新类准确度为 {new_acc * 100:.2f}"
+            )
+            #############
 
     # 合并自一致性和互一致性的伪标签集
     def merge_pseudo_labels(
@@ -345,42 +358,42 @@ class Tri_Training:
         - 先去重；
         - 如果发生冲突，优先保留互一致性的结果。
         """
-        # 初始化合并后的伪标签映射
-        final_lb_train_u = []
-        final_lb_y = []
+        pass
+        # # 初始化合并后的伪标签映射
+        # final_lb_train_u = []
+        # final_lb_y = []
 
-        # 建立索引到标签的映射（互一致性优先）
-        label_map = {}
+        # # 建立索引到标签的映射（互一致性优先）
+        # label_map = {}
 
-        # Step 1: 添加互一致性标签（优先保留）
-        for idx, sample in enumerate(lb_train_u_mutual):
-            label_map[sample] = lb_y_mutual[idx]  # 直接存储互一致性结果
+        # # Step 1: 添加互一致性标签（优先保留）
+        # for idx, sample in enumerate(lb_train_u_mutual):
+        #     label_map[sample] = lb_y_mutual[idx]  # 直接存储互一致性结果
 
-        # Step 2: 添加自一致性标签（如果存在冲突，忽略自一致性的结果）
-        all_self_train_u = lb_train_u_self_j + lb_train_u_self_k
-        all_self_y = lb_y_self_j + lb_y_self_k
-        for idx, sample in enumerate(all_self_train_u):
-            if sample not in label_map:  # 如果样本未被标记，直接添加
-                label_map[sample] = all_self_y[idx]
-            else:
-                # 如果样本已存在，跳过（保留互一致性结果）
-                pass
+        # # Step 2: 添加自一致性标签（如果存在冲突，忽略自一致性的结果）
+        # all_self_train_u = lb_train_u_self_j + lb_train_u_self_k
+        # all_self_y = lb_y_self_j + lb_y_self_k
+        # for idx, sample in enumerate(all_self_train_u):
+        #     if sample not in label_map:  # 如果样本未被标记，直接添加
+        #         label_map[sample] = all_self_y[idx]
+        #     else:
+        #         # 如果样本已存在，跳过（保留互一致性结果）
+        #         pass
 
-        # Step 3: 构建去重后的伪标签集
-        for sample, label in label_map.items():
-            final_lb_train_u.append(sample)
-            final_lb_y.append(label)
+        # # Step 3: 构建去重后的伪标签集
+        # for sample, label in label_map.items():
+        #     final_lb_train_u.append(sample)
+        #     final_lb_y.append(label)
 
-        print(f"最终伪标签数量：{len(final_lb_train_u)}")
-        # 输出最终伪标签的准确性
-        base_acc, new_acc = self.pseudo_label_acc(final_lb_train_u, final_lb_y)
-        print(f"最终基类准确度为 {base_acc * 100:.2f}，新类准确度为 {new_acc * 100:.2f}")
-        return final_lb_train_u, final_lb_y
+        # print(f"最终伪标签数量：{len(final_lb_train_u)}")
+        # # 输出最终伪标签的准确性
+        # print(f"最终伪标签准确度情况:")
+        # self.pseudo_label_acc(final_lb_train_u, final_lb_y)
+        # return final_lb_train_u, final_lb_y
 
     def self_consistency(self, model_idx, train_u, label_u):
 
         print(f"模型 {model_idx} 自一致性检测中")
-        # logits_no_aug = self.estimators[model_idx].predict(train_u)
         logits_weak = self.estimators[model_idx].predict(
             train_u, self.weak_augamentation
         )
@@ -392,15 +405,6 @@ class Tri_Training:
         ulb_y_no_aug = label_u
         ulb_y_weak = np.argmax(logits_weak, axis=1)
         ulb_y_strong = np.argmax(logits_strong, axis=1)
-        # mask1 = (ulb_y_no_aug == ulb_y_weak)
-        # mask2 = (ulb_y_weak != ulb_y_strong)
-
-        # # 统计每个条件为True的数量
-        # num_true_mask1 = np.sum(mask1)
-        # num_true_mask2 = np.sum(mask2)
-
-        # print(f"条件1 (无增广 == 弱增广) 为True的数量: {num_true_mask1}")
-        # print(f"条件2 (弱增广 != 强增广) 为True的数量: {num_true_mask2}")
 
         # 获取满足条件的伪标签（无增广 == 弱增广 != 强增广）
         consistent_mask = (ulb_y_no_aug == ulb_y_weak) & (ulb_y_weak != ulb_y_strong)
@@ -410,8 +414,7 @@ class Tri_Training:
         lb_y = [
             ulb_y_no_aug[idx] for idx, is_true in enumerate(consistent_mask) if is_true
         ]
-        print(f"模型 {model_idx} 自一致性标记数量：{len(lb_train_u)}")
-        print(f"其中无增广与弱增广预测一致但与强增广不一致的样本数：{np.sum(consistent_mask)}")
+        print(f"模型 {model_idx} 根据自一致性筛选后, 满足条件的伪标注数量: {len(lb_train_u)}")
         return lb_train_u, lb_y
 
     def predict(self, datums):
@@ -474,47 +477,6 @@ class Tri_Training:
         weak_aug = Compose(weak_aug)
 
         print("Building strong augmentations")
-        # strong_aug = []
-        # # 添加 RandomHorizontalFlip
-        # print("+ random horizontal flip")
-        # strong_aug += [RandomHorizontalFlip()]
-        # # 确保图像大小足够再进行 RandomCrop
-        # print(
-        #     f"+ resize the smaller edge to {max(input_size)} (ensure size > crop size)"
-        # )
-        # strong_aug += [Resize(max(input_size), interpolation=interp_mode)]
-        # print("+ random crop with padding=0.125 and padding_mode='reflect'")
-        # strong_aug += [
-        #     RandomCrop(
-        #         size=input_size,
-        #         padding=int(0.125 * max(input_size)),
-        #         padding_mode="reflect",
-        #     )
-        # ]
-        # # 添加随机颜色抖动
-        # print("+ random color jitter")
-        # strong_aug += [
-        #     ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1)
-        # ]
-        # # 随机灰度
-        # print("+ random grayscale")
-        # strong_aug += [RandomGrayscale(p=0.2)]
-        # # 随机模糊
-        # print("+ random gaussian blur")
-        # strong_aug += [RandomApply([GaussianBlur(kernel_size=3)], p=0.1)]
-        # # 中心裁剪
-        # print(f"+ {input_size[0]}x{input_size[1]} center crop")
-        # strong_aug += [CenterCrop(input_size)]
-
-        # # 转为Tensor
-        # print("+ to torch tensor of range [0, 1]")
-        # strong_aug += [ToTensor()]
-
-        # # 归一化
-        # print(f"+ normalization (mean={PIXEL_MEAN}, std={PIXEL_STD})")
-        # strong_aug += [Normalize(mean=PIXEL_MEAN, std=PIXEL_STD)]
-
-        # strong_aug = Compose(strong_aug)
 
         # TODO:可以加上随机裁剪的概率
 

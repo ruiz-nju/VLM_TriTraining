@@ -66,9 +66,10 @@ class ImageNet(DatasetBase):
                 super().__init__(train_x=train, val=test, test=test)
             elif cfg.TRAINER.STRATEGY == "semi-supervised":
                 seed = cfg.SEED
+                ratio = 0.05  # 你的采样比例
                 preprocessed = os.path.join(
                     self.split_fewshot_dir,
-                    f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabeled_shots}-seed_{seed}.pkl",
+                    f"semi_supervised_shot_{num_shots}_unlabeled_shot_{num_unlabeled_shots}-seed_{seed}-ratio_{ratio:.2f}.pkl",
                 )
 
                 if os.path.exists(preprocessed):
@@ -79,47 +80,49 @@ class ImageNet(DatasetBase):
                             data["train_x"],
                             data["train_u"],
                         )
+                        # 直接加载，无需再采样
+                        num_new_train_u = len(train_u)
+                        print(f"当前根据{ratio:.2f}比例采样后的train_u数量: {num_new_train_u}")
                 else:
                     train_x = self.generate_fewshot_dataset(train, num_shots=num_shots)
                     train_u = self.generate_fewshot_dataset(
                         train, num_shots=num_unlabeled_shots
                     )
+                    subsample = cfg.DATASET.SUBSAMPLE_CLASSES
+                    train_x, test = OxfordPets.subsample_classes(train_x, test, subsample=subsample)
+
+                    # 去除重复的数据
+                    train_x_impath = [item.impath for item in train_x]
+
+                    print(f"train_u 中每个类别取 {ratio * 100}% 的数据")
+                    num_old_train_u = len(train_u)
+                    # 按标签分组
+                    label_groups = defaultdict(list)
+                    for item in tqdm(train_u, desc="按标签分组"):
+                        label_groups[item.label].append(item)
+                    new_train_u = []
+                    for _, items in tqdm(label_groups.items(), desc="处理每个类别"):
+                        # 去除重复的数据
+                        items = [item for item in items if item.impath not in train_x_impath]
+                        n_total = len(items)
+                        if n_total == 0:
+                            continue
+                        n_select = int(ratio * n_total)
+                        if n_select == 0:
+                            n_select = 1
+                        n_select = min(n_select, n_total)
+                        # 随机抽样
+                        selected = random.sample(items, n_select)
+                        new_train_u.extend(selected)
+                    train_u = new_train_u
+                    num_new_train_u = len(train_u)
+                    print(f"num_old_train_u: {num_old_train_u}, num_new_train_u: {num_new_train_u}")
+
+                    # 保存采样后的train_u
                     data = {"train_x": train_x, "train_u": train_u}
                     print(f"Saving preprocessed few-shot data to {preprocessed}")
                     with open(preprocessed, "wb") as file:
                         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
-                subsample = cfg.DATASET.SUBSAMPLE_CLASSES
-                train_x, test = OxfordPets.subsample_classes(train_x, test, subsample=subsample)
-
-                # 去除重复的数据
-                train_x_impath = [item.impath for item in train_x]
-                # train_u = [item for item in train_u if item.impath not in train_x_impath]
-
-                # 取少量数据
-                ratio = 0.05
-                print(f"train_u 中每个类别取 {ratio * 100}% 的数据")
-                num_old_train_u = len(train_u)
-                # 按标签分组
-                label_groups = defaultdict(list)
-                for item in tqdm(train_u, desc="按标签分组"):
-                    label_groups[item.label].append(item)
-                new_train_u = []
-                for label, items in tqdm(label_groups.items(), desc="处理每个类别"):
-                    # 去除重复的数据
-                    items = [item for item in items if item.impath not in train_x_impath]
-                    n_total = len(items)
-                    if n_total == 0:
-                        continue
-                    n_select = int(ratio * n_total)
-                    if n_select == 0:
-                        n_select = 1
-                    n_select = min(n_select, n_total)
-                    # 随机抽样
-                    selected = random.sample(items, n_select)
-                    new_train_u.extend(selected)
-                train_u = new_train_u
-                num_new_train_u = len(train_u)
-                print(f"num_old_train_u: {num_old_train_u}, num_new_train_u: {num_new_train_u}")
 
                 super().__init__(
                     train_x=train_x, train_u=train_u, val=test, test=test, cfg=cfg
