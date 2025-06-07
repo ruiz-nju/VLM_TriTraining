@@ -16,6 +16,8 @@ from dassl.utils import read_image
 from dassl.data.transforms.transforms import build_transform
 from sklearn.metrics import accuracy_score
 import os.path as osp
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # custom
 import datasets.oxford_pets
@@ -173,6 +175,7 @@ def extend_cfg(cfg):
     cfg.TRAIN_OR_TEST = "train"
     cfg.INPUT.BASE_CONFIDENCE_BOUND = 0.9
     cfg.INPUT.NEW_CONFIDENCE_BOUND = 0.9
+    cfg.INPUT.CONFIDENCE_BOUND = 0.9
 
 def get_dataset(model):
     return (
@@ -202,9 +205,10 @@ def main(args):
         for i in range(3):
             print(f"----------Build up Base2new {model_names[i]}----------")
             set_random_seed(i + 1)
-            # cfg[i].defrost()
-            # cfg[i].TRAINER.STRATEGY = "supervised"
-            # cfg[i].freeze()
+            # 只给base类别进行训练
+            cfg[i].defrost()
+            cfg[i].TRAINER.STRATEGY = "supervised"
+            cfg[i].freeze()
             model = build_trainer(cfg[i])
             if i == 0:
                 train_x, train_u, val, test = get_dataset(model)
@@ -246,9 +250,19 @@ def main(args):
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
         print(f"Accuracy: {accuracy}")
-        acc_each_model = [accuracy_score(test_y, y) for y in y_pred_each_model]
-        for i in range(3):
-            print(f"Accuracy of {model_names[i]}: {acc_each_model[i]}")
+        from sklearn.metrics import confusion_matrix
+        cm = confusion_matrix(test_y, y_pred)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix')
+        plt.tight_layout()
+        plt.savefig(os.path.join(args.output_dir, "confusion_matrix.png"))
+        plt.close()
+        # acc_each_model = [accuracy_score(test_y, y) for y in y_pred_each_model]
+        # for i in range(3):
+        #     print(f"Accuracy of {model_names[i]}: {acc_each_model[i]}")
         sys.stdout.flush()
         return
     else:

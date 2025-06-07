@@ -3,23 +3,18 @@
 #!/bin/bash
 
 # custom config
-DATA=/mnt/hdd/zhurui/data
+DATA=/data0/zhur/data
 TRAINER=CoOp
 
 DATASET=$1
 CFG=$2  # config file 例如 vit_b16
 SHOTS=$3 
 SEED=$4 # random seed
-
-# CTP=$4  # class token position (end or middle) 默认为 end
-# NCTX=$5  # number of context tokens 默认为 16
-# CSC=$6  # class-specific context (False or True) 默认为 False
-
-# eg. bash scripts/coop/base2novel_train.sh caltech101 vit_b16 16 1
+DEVICE=$5
 
 
-DIR=output/${DATASET}/${TRAINER}/base2novel_train/${CFG}/shots_${SHOTS}/seed_${SEED}
-CUDA_VISIBLE_DEVICES=0 python train.py \
+DIR=output/reproduce/${DATASET}/${TRAINER}/base2novel_train/${CFG}/shots_${SHOTS}/seed_${SEED}
+CUDA_VISIBLE_DEVICES=$DEVICE python train.py \
     --root ${DATA} \
     --seed ${SEED} \
     --trainer ${TRAINER} \
@@ -29,8 +24,6 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
     DATASET.NUM_SHOTS ${SHOTS}\
     TRAINER.MODAL base2novel \
     DATASET.SUBSAMPLE_CLASSES base \
-    # TRAINER.COOP.N_CTX ${NCTX} \
-    # TRAINER.COOP.CSC ${CSC} \
-    # TRAINER.COOP.CLASS_TOKEN_POSITION ${CTP} \
+
 
 # 通过 opts 传入的参数，会在 setup_cfg 中通过 cfg.merge_from_list(args.opts) 来动态修改配置

@@ -1,12 +1,12 @@
 DEVICE=1
-for dataset in cifar10 cifar100
-do 
-    for seed in 1 2 3
-    do 
-        sh scripts/vote/base2novel_test_all.sh $dataset 16 $seed $DEVICE
-    done
-done
-for dataset in imagenet100
+# for dataset in cifar10 cifar100
+# do 
+#     for seed in 1 2 3
+#     do 
+#         sh scripts/vote/base2novel_test_all.sh $dataset 16 $seed $DEVICE
+#     done
+# done
+for dataset in oxford_pets
 do 
     for seed in 1 2 3
     do 

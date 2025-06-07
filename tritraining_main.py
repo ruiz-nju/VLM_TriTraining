@@ -18,7 +18,7 @@ from dassl.data.transforms.transforms import build_transform
 from sklearn.metrics import accuracy_score, confusion_matrix
 import os.path as osp
 import matplotlib.pyplot as plt
-
+import seaborn as sns
 # custom
 import datasets.oxford_pets
 import datasets.oxford_flowers
@@ -210,6 +210,18 @@ def main(args):
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
         print(f"Accuracy: {accuracy}")
+        # 1. 计算混淆矩阵
+        cm = confusion_matrix(test_y, y_pred)
+        # 2. 绘制混淆矩阵 (不显示单元格数值)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=False, cmap='Blues', # annot 设置为 False
+                    xticklabels=np.unique(test_y), yticklabels=np.unique(test_y),
+                    cbar=True) # 你可能希望显示颜色条 (cbar=True) 以便理解颜色对应的量级
+        plt.xlabel('Predicted Labels')
+        plt.ylabel('True Labels')
+        plt.title('Confusion Matrix (Color-Coded)')
+        plt.savefig(os.path.join(args.output_dir, "confusion_matrix.png"))
+        plt.close()
         # acc_each_model = [accuracy_score(test_y, y) for y in y_pred_each_model]
         # for i in range(3):
         #     print(f"Accuracy of {model_names[i]}: {acc_each_model[i]}")

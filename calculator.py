@@ -242,17 +242,17 @@ def main():
     print("Base2New")
     print("*"*40)
     datasets = [
-        # "caltech101",
+        "caltech101",
         # "dtd",
-        # "eurosat",
-        # "fgvc_aircraft",
-        # "imagenet",
-        "food101",
-        # "oxford_flowers",
-        "oxford_pets",
-        # "stanford_cars",
-        "sun397",
-        # "ucf101"
+        "eurosat",
+        "fgvc_aircraft",
+        "imagenet",
+        # "food101",
+        "oxford_flowers",
+        # "oxford_pets",
+        "stanford_cars",
+        # "sun397",
+        "ucf101"
     ]
 
     all_avg_base = []
@@ -327,9 +327,9 @@ def main():
     print("*"*40)
     datasets = [
         # "cifar10",
-        "cifar100",
-        # "stl10",
-        "imagenet"
+        # "cifar100",
+        # # "stl10",
+        # "imagenet"
     ]
 
     for dataset in datasets:

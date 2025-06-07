@@ -1,4 +1,4 @@
-DEVICE=1
+DEVICE=3
 
 
 for dataset in imagenet100

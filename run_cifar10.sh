@@ -1,7 +1,7 @@
-DEVICE=2
+DEVICE=1
 
 
-for dataset in cifar100
+for dataset in cifar10
 do 
     for seed in 1 2 3
     do 

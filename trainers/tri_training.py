@@ -109,11 +109,12 @@ class Tri_Training:
                 j, k = np.delete(np.array([0, 1, 2]), i)
                 update[i] = False
                 e[i] = self.measure_error(train_x, j, k)
-                if e[i] < 0.025 and Warmuped:
-                    print(f"模型 {i} 的错误率小于 0.025, 跳过更新")
-                    continue
+                # if e[i] < 0.025 and Warmuped:
+                #     print(f"模型 {i} 的错误率小于 0.025, 跳过更新")
+                #     continue
 
                 if e[i] < e_prime[i] and e_prime[i] - e[i] > e_prime[i] / 10:
+                # if e[i] < e_prime[i]:
                     # only mutual consistency
                     lb_train_u_mutual, lb_y_mutual = self.mutual_consistency(j, k, train_u)
                     lb_train_u_self_j, lb_y_self_j = self.self_consistency(j, lb_train_u_mutual, lb_y_mutual)
