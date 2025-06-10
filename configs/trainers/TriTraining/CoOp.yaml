@@ -23,8 +23,9 @@ OPTIM:
 
 TRAIN: 
   PRINT_FREQ: 50
-  WARMUP: 20
-  TRITRAINING_EPOCH: 40
+  # 此处是 ssl 的 coop 超参
+  # WARMUP: 20
+  # TRITRAINING_EPOCH: 40
 
 
 MODEL: 

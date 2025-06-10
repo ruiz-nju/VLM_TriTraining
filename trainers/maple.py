@@ -388,9 +388,9 @@ class MaPLe(TrainerX):
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
 
-    def custom_load_model(self, dir):
+    def custom_load_model(self, dir, model_name="final_model.pth.tar"):
         names = self.get_model_names()
-        model_file = "final_model.pth.tar"
+        model_file = model_name
 
         for name in names:
             model_path = osp.join(dir, name, model_file)

@@ -1,4 +1,3 @@
-import pdb
 import argparse
 import sklearn.utils
 import torch
@@ -15,10 +14,11 @@ import numpy as np
 import sklearn
 from dassl.utils import read_image
 from dassl.data.transforms.transforms import build_transform
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score
 import os.path as osp
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 # custom
 import datasets.oxford_pets
 import datasets.oxford_flowers
@@ -35,18 +35,17 @@ import datasets.imagenet_sketch
 import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
-import datasets.cifar10
-import datasets.cifar100
-import datasets.imagenet100
 import trainers.coop
 import trainers.cocoop
+import trainers.tri_training
 import trainers.zsclip
 import trainers.maple
 import trainers.vpt
 import trainers.promptsrc
 import trainers.tcp
-
 from trainers.tri_training import Tri_Training
+
+import pdb
 
 
 def setup_cfg(args, model_names):
@@ -79,6 +78,7 @@ def setup_cfg(args, model_names):
         if args.head:
             cfg[i].MODEL.HEAD.NAME = args.head
         cfg[i].merge_from_list(args.opts)
+        cfg[i].freeze()
     return cfg
 
 
@@ -187,7 +187,7 @@ def get_dataset(model):
 
 
 def main(args):
-    model_names = ["PromptSRC", "PromptSRC", "PromptSRC"]
+    model_names = [args.classifier, args.classifier, args.classifier]
     cfg = setup_cfg(args, model_names)
 
     base_cfg = cfg[0]
@@ -196,30 +196,68 @@ def main(args):
     if torch.cuda.is_available() and base_cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
 
-    model_dirs = [osp.join(cfg[i].MODEL_DIR, model_names[i]) for i in range(3)]
-    if args.eval_only:
-        models = []
+    models = []
+    models_tri = []
+    warm_up_epochs = base_cfg.TRAIN.WARMUP
+    train_x=None
+    # Build up models
+    if not args.eval_only:
         for i in range(3):
+            print(f"----------Build up Base2new {model_names[i]}----------")
+            set_random_seed(i + 1)
+            # 只给base类别进行训练
+            cfg[i].defrost()
+            cfg[i].TRAINER.STRATEGY = "supervised"
+            cfg[i].freeze()
             model = build_trainer(cfg[i])
-            model.custom_load_model(model_dirs[i])
-            models.append(model)
-        train_x, train_u, val, test = get_dataset(models[0])
-        test_y = [datum._real_label for datum in test]
-        tri_trainer = Tri_Training(base_cfg, *models)
+            if i == 0:
+                train_x, train_u, val, test = get_dataset(model)
+                train_x = sklearn.utils.shuffle(train_x, random_state=base_cfg.SEED)
+                print(f"train_x size: {len(train_x)}")
+            sub_train_x = sklearn.utils.resample(train_x, replace=False, n_samples=len(train_x))
+            print(f"Training model {i} for {warm_up_epochs} epochs")
+            model.fit(sub_train_x, max_epoch=warm_up_epochs, Save=True)
+    
+    for i in range(3):
+        print(f"----------Build up Tritrain {model_names[i]}----------")
+        cfg[i].defrost()
+        cfg[i].TRAINER.STRATEGY = "semi-supervised"
+        cfg[i].freeze()
+        model_tri = build_trainer(cfg[i])
+        # print(cfg[i].MODEL_DIR)
+        load_dirs = [osp.join(cfg[i].MODEL_DIR, model_names[i]) for i in range(3)]
+        print(load_dirs[i])
+        model_tri.custom_load_model(load_dirs[i], "warmup.pth.tar")
+        models_tri.append(model_tri)
+
+    train_x, train_u, val, test = get_dataset(models_tri[0])
+    train_x = sklearn.utils.shuffle(train_x, random_state=base_cfg.SEED)
+    train_u = sklearn.utils.shuffle(train_u, random_state=base_cfg.SEED)
+    test_y = [datum.label for datum in test]
+
+    if base_cfg.SEED >= 0:
+        print("Setting fixed seed: {}".format(base_cfg.SEED))
+        set_random_seed(base_cfg.SEED)
+    if args.eval_only:
+        # output/TriTraining/base2novel_train/dtd/shots_16/unlabeled_shots_0/seed_1/model_0
+        # PromptSRC
+        load_dirs = [osp.join(cfg[i].MODEL_DIR, model_names[i]) for i in range(3)]
+        for i in range(3):
+            models_tri[i].custom_load_model(load_dirs[i])
+
+        tri_trainer = Tri_Training(base_cfg, *models_tri)
         y_pred, y_pred_each_model = tri_trainer.predict(test)
         # 计算准确度
         accuracy = accuracy_score(test_y, y_pred)
         print(f"Accuracy: {accuracy}")
-        # 1. 计算混淆矩阵
+        from sklearn.metrics import confusion_matrix
         cm = confusion_matrix(test_y, y_pred)
-        # 2. 绘制混淆矩阵 (不显示单元格数值)
         plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=False, cmap='Blues', # annot 设置为 False
-                    xticklabels=np.unique(test_y), yticklabels=np.unique(test_y),
-                    cbar=True) # 你可能希望显示颜色条 (cbar=True) 以便理解颜色对应的量级
-        plt.xlabel('Predicted Labels')
-        plt.ylabel('True Labels')
-        plt.title('Confusion Matrix (Color-Coded)')
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix')
+        plt.tight_layout()
         plt.savefig(os.path.join(args.output_dir, "confusion_matrix.png"))
         plt.close()
         # acc_each_model = [accuracy_score(test_y, y) for y in y_pred_each_model]
@@ -228,29 +266,11 @@ def main(args):
         sys.stdout.flush()
         return
     else:
-        print("----------Stage: Traditional warmup stage----------")
-        models = []
-        # Build up models
-        for i in range(3):
-            print(f"----------Build up {model_names[i]}----------")
-            set_random_seed(i + 1)
-            model = build_trainer(cfg[i])
-            models.append(model)
-    
-        if base_cfg.SEED >= 0:
-            print("Setting fixed seed: {}".format(base_cfg.SEED))
-            set_random_seed(base_cfg.SEED)
-
-        train_x, train_u, val, test = get_dataset(models[0])
-        train_x = sklearn.utils.shuffle(train_x, random_state=base_cfg.SEED)
-        train_u = sklearn.utils.shuffle(train_u, random_state=base_cfg.SEED)
-        test_y = [datum.label for datum in test]
-        print(f"train_x size: {len(train_x)}")
-        print(f"train_u size: {len(train_u)}")
-        print(f"test size: {len(test)}")
-        tri_trainer = Tri_Training(base_cfg, *models)
-        tri_trainer.fit(train_x, train_u)
+        # 实例化 Tri_Training 并进行训练
+        tri_trainer = Tri_Training(base_cfg, *models_tri)
+        tri_trainer.fit(train_x, train_u, True)
         sys.stdout.flush()
+        return
 
 
 if __name__ == "__main__":
@@ -301,6 +321,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--no-train", action="store_true", help="do not call trainer.train()"
+    )
+    parser.add_argument(
+        "--classifier", type=str, default="", help="name of classifier"
     )
     parser.add_argument(
         "opts",

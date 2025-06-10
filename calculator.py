@@ -3,7 +3,7 @@ import numpy as np
 import os.path as osp
 import warnings
 from dassl.utils import check_isfile
-
+import argparse
 # 禁用所有警告
 warnings.filterwarnings("ignore")
 
@@ -29,18 +29,20 @@ def read_result(file: str):
         return None  # 直接返回 None，跳过报错
 
 
-def get_result_base2new(dataset: str):
+def get_result_base2new(dataset: str, classifier: str):
     dir_name = "output"
     base_dir = osp.join(
         dir_name,
         "TriTraining/base2novel_test_base",
         dataset,
+        classifier,
         "shots_16/unlabeled_shots_0",
     )
     new_dir = osp.join(
         dir_name,
         "TriTraining/base2novel_test_new",
         dataset,
+        classifier,
         "shots_16/unlabeled_shots_0",
     )
     # base_dir = osp.join(
@@ -116,24 +118,27 @@ def get_result_base2new(dataset: str):
     else:
         return None, None, None
 
-def get_result_ow(dataset: str):
+def get_result_ow(dataset: str, classifier: str):
     dir_name = "output"
     base_dir = osp.join(
         dir_name,
         "TriTraining/base2novel_test_base",
         dataset,
+        classifier,
         "shots_16/unlabeled_shots_0",
     )
     new_dir = osp.join(
         dir_name,
         "TriTraining/base2novel_test_new",
         dataset,
+        classifier,
         "shots_16/unlabeled_shots_0",
     )
     all_dir = osp.join(
         dir_name,
         "TriTraining/base2novel_test_all",
         dataset,
+        classifier,
         "shots_16/unlabeled_shots_0",
     )
     # base_dir = osp.join(
@@ -197,7 +202,7 @@ def get_result_ow(dataset: str):
     else:
         return None, None, None
     
-def get_result_ssl(dataset: str):
+def get_result_ssl(dataset: str, classifier: str):
     if dataset == "cifar10":
         num_shots = [4, 25, 400]
     else:
@@ -205,7 +210,7 @@ def get_result_ssl(dataset: str):
     for num_shot in num_shots:
         print(f"[Num Shots: {num_shot}]:", end=" ")
         dir_name = "output"
-        dir = osp.join(dir_name, "TriTraining/ssl_test", dataset, f"shots_{num_shot}/unlabeled_shots_0")
+        dir = osp.join(dir_name, "TriTraining/ssl_test", dataset, classifier, f"shots_{num_shot}/unlabeled_shots_0")
         accs = []
 
         for seed in range(1, 4):
@@ -237,21 +242,21 @@ def get_result_ssl(dataset: str):
                 f"Average: acc: Nan"
             )
 
-def main():
+def main(arg):
     print("*"*40)
     print("Base2New")
     print("*"*40)
     datasets = [
         "caltech101",
-        # "dtd",
+        "dtd",
         "eurosat",
         "fgvc_aircraft",
         "imagenet",
-        # "food101",
+        "food101",
         "oxford_flowers",
-        # "oxford_pets",
+        "oxford_pets",
         "stanford_cars",
-        # "sun397",
+        "sun397",
         "ucf101"
     ]
 
@@ -262,7 +267,7 @@ def main():
     for dataset in datasets:
         try:
             print(f"---- Dataset: {dataset} ----")
-            avg_base, avg_new, avg_hm = get_result_base2new(dataset)
+            avg_base, avg_new, avg_hm = get_result_base2new(dataset, arg.classifier)
             if avg_base is not None and avg_new is not None and avg_hm is not None:
                 all_avg_base.append(avg_base)
                 all_avg_new.append(avg_new)
@@ -288,9 +293,9 @@ def main():
     print("OW")
     print("*"*40)
     datasets = [
-        "cifar10",
-        "cifar100",
-        "imagenet100"
+        # "cifar10",
+        # "cifar100",
+        # "imagenet100"
     ]
 
     all_avg_base = []
@@ -300,7 +305,7 @@ def main():
     for dataset in datasets:
         try:
             print(f"---- Dataset: {dataset} ----")
-            avg_base, avg_new, avg_all = get_result_ow(dataset)
+            avg_base, avg_new, avg_all = get_result_ow(dataset, arg.classifier)
             if avg_base is not None and avg_new is not None and avg_all is not None:
                 all_avg_base.append(avg_base)
                 all_avg_new.append(avg_new)
@@ -335,7 +340,7 @@ def main():
     for dataset in datasets:
         try:
             print(f"---- Dataset: {dataset} ----")
-            _ = get_result_ssl(dataset)
+            _ = get_result_ssl(dataset, arg.classifier)
         except Exception:
             # 静默忽略任何异常
             continue
@@ -343,4 +348,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = argparse.ArgumentParser()
+    args.add_argument("--classifier", type=str, required=True, choices=["CoOp", "MaPLe", "PromptSRC"], help="classifier, 可选项: CoOp, MaPLe, PromptSRC")
+    args = args.parse_args()
+    main(args)
