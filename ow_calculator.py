@@ -31,7 +31,7 @@ def read_result(file: str):
 def main(data_dir):
     accs = []
     for seed in range(1, 4):
-        file = osp.join(data_dir, f"seed{seed}", "log.txt")
+        file = osp.join(data_dir, f"seed_{seed}", "log.txt")
         if check_isfile(file):
             accs.append(read_result(file))
     # 输出均值和方差，形式为 a±b

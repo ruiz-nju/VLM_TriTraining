@@ -35,6 +35,11 @@ import datasets.imagenet_sketch
 import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
+
+import datasets.cifar10
+import datasets.cifar100
+import datasets.stl10
+
 import trainers.coop
 import trainers.cocoop
 import trainers.tri_training
@@ -91,7 +96,7 @@ def extend_cfg(cfg):
     cfg.TRAINER.COOP.ALPHA = 1.0
     cfg.TRAINER.COOP.N_CTX = 16  # number of context vectors
     cfg.TRAINER.COOP.CSC = False  # class-specific context
-    cfg.TRAINER.COOP.CTX_INIT = False  # initialization words
+    cfg.TRAINER.COOP.CTX_INIT = "a photo of a"  # initialization words
     cfg.TRAINER.COOP.W = 1.0
     cfg.TRAINER.COOP.PREC = "fp16"  # fp16, fp32, amp
     cfg.TRAINER.COOP.CLASS_TOKEN_POSITION = "end"  # 'middle' or 'end' or 'front'

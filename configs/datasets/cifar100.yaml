@@ -9,9 +9,3 @@ INPUT:
 TRAIN:
   WARMUP: 20
   TRITRAINING_EPOCH: 1
-
-# 20 10 bad all : 53
-# 20 2 55.78
-# 25 5 54
-# 10 3 54.93
-# 20 3 55.13

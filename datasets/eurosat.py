@@ -1,5 +1,6 @@
 import os
 import pickle
+import pdb
 
 from dassl.data.datasets import DATASET_REGISTRY, Datum, DatasetBase
 from dassl.utils import mkdir_if_missing
@@ -42,7 +43,6 @@ class EuroSAT(DatasetBase):
             )
             OxfordPets.save_split(train, val, test, self.split_path, self.image_dir)
 
-        num_shots = cfg.DATASET.NUM_SHOTS
         num_shots = cfg.DATASET.NUM_SHOTS
         num_unlabled_shots = cfg.DATASET.NUM_UNLABELED_SHOTS
         if num_shots >= 1:

@@ -8,9 +8,3 @@ INPUT:
 TRAIN:
   WARMUP: 100
   TRITRAINING_EPOCH: 50
-
-# 15 + 5
-# 20 + 5
-# 10 + 5
-# 40 + 20
-# 50 + 20

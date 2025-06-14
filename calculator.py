@@ -196,7 +196,7 @@ def get_result_ow(dataset: str, classifier: str):
         std_new = np.std(new_accs)
         std_all = np.std(all_accs)
         print(
-            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}, new: {avg_new * 100:.2f}, all: {avg_all * 100:.2f}"
+            f"Dataset {dataset} Average: base: {avg_base * 100:.2f}±{std_base * 100:.2f}, new: {avg_new * 100:.2f}±{std_new * 100:.2f}, all: {avg_all * 100:.2f}±{std_all * 100:.2f}"
         )
         return avg_base, avg_new, avg_all
     else:
@@ -257,7 +257,7 @@ def main(arg):
         "oxford_pets",
         "stanford_cars",
         "sun397",
-        "ucf101"
+        "ucf101",
     ]
 
     all_avg_base = []
@@ -293,9 +293,9 @@ def main(arg):
     print("OW")
     print("*"*40)
     datasets = [
-        # "cifar10",
-        # "cifar100",
-        # "imagenet100"
+        "cifar10",
+        "cifar100",
+        "imagenet100"
     ]
 
     all_avg_base = []
@@ -333,7 +333,7 @@ def main(arg):
     datasets = [
         # "cifar10",
         # "cifar100",
-        # # "stl10",
+        # "stl10",
         # "imagenet"
     ]
 
