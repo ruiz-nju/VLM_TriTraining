@@ -224,12 +224,9 @@ class DatasetBase:
                     else:
                         sampled_items = items
                 dataset.extend(sampled_items)
-
             output.append(dataset)
-
         if len(output) == 1:
             return output[0]
-
         return output
 
     def split_dataset_by_label(self, data_source):

@@ -8,7 +8,7 @@ from collections import defaultdict
 import random
 from tqdm import tqdm
 from .oxford_pets import OxfordPets
-
+import pdb
 
 @DATASET_REGISTRY.register()
 class ImageNet(DatasetBase):
@@ -87,13 +87,8 @@ class ImageNet(DatasetBase):
                     train_x = self.generate_fewshot_dataset(train, num_shots=num_shots)
                     train_u = self.generate_fewshot_dataset(
                         train, num_shots=num_unlabeled_shots
-                    )
-                    subsample = cfg.DATASET.SUBSAMPLE_CLASSES
-                    train_x, test = OxfordPets.subsample_classes(train_x, test, subsample=subsample)
-
-                    # 去除重复的数据
-                    train_x_impath = [item.impath for item in train_x]
-
+                    )                    
+                    # 按照标签分组，然后每个类别取 ratio * 100% 的数据
                     print(f"train_u 中每个类别取 {ratio * 100}% 的数据")
                     num_old_train_u = len(train_u)
                     # 按标签分组
@@ -101,6 +96,7 @@ class ImageNet(DatasetBase):
                     for item in tqdm(train_u, desc="按标签分组"):
                         label_groups[item.label].append(item)
                     new_train_u = []
+                    train_x_impath = [item.impath for item in train_x]
                     for _, items in tqdm(label_groups.items(), desc="处理每个类别"):
                         # 去除重复的数据
                         items = [item for item in items if item.impath not in train_x_impath]
@@ -124,6 +120,8 @@ class ImageNet(DatasetBase):
                     with open(preprocessed, "wb") as file:
                         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
+                subsample = cfg.DATASET.SUBSAMPLE_CLASSES
+                train_x, test = OxfordPets.subsample_classes(train_x, test, subsample=subsample)
                 super().__init__(
                     train_x=train_x, train_u=train_u, val=test, test=test, cfg=cfg
                 )

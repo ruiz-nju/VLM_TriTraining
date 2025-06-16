@@ -3,17 +3,18 @@
 #cd ../..
 
 # custom config
-DATA=/mnt/hdd/zhurui/data
+DATA=/data0/zhur/data
 TRAINER=MaPLe
 
 DATASET=$1
 CFG=$2  # config file 例如 vit_b16
 SHOTS=$3
 SEED=$4 # random seed
+DEVICE=$5
 
 
-DIR=output/${DATASET}/${TRAINER}/base2novel_train/${CFG}/shots_${SHOTS}/seed_${SEED}
-CUDA_VISIBLE_DEVICES=0 python train.py \
+DIR=output/reproduce/${DATASET}/${TRAINER}/base2novel_train/${CFG}/shots_${SHOTS}/seed_${SEED}
+CUDA_VISIBLE_DEVICES=$DEVICE python train.py \
     --root ${DATA} \
     --seed ${SEED} \
     --trainer ${TRAINER} \

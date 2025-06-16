@@ -23,7 +23,5 @@ CUDA_VISIBLE_DEVICES=$DEVICE python train.py \
     --output-dir ${DIR} \
     DATASET.NUM_SHOTS ${SHOTS}\
     TRAINER.MODAL base2novel \
-    DATASET.SUBSAMPLE_CLASSES base \
+    DATASET.SUBSAMPLE_CLASSES base
 
-
-# 通过 opts 传入的参数，会在 setup_cfg 中通过 cfg.merge_from_list(args.opts) 来动态修改配置

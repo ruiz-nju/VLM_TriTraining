@@ -50,8 +50,8 @@ def main():
         base_accs = []
         novel_accs = []
         for seed in range(1, 4):
-            base_file = osp.join(data_dir, dataset, "CoOp", "base2novel_train", "vit_b16","shots_16", f"seed_{seed}", "log.txt")
-            novel_file = osp.join(data_dir, dataset, "CoOp", "base2novel_test", "vit_b16","shots_16", f"seed_{seed}", "log.txt")
+            base_file = osp.join(data_dir, dataset, "MaPLe", "base2novel_train", "vit_b16","shots_16", f"seed_{seed}", "log.txt")
+            novel_file = osp.join(data_dir, dataset, "MaPLe", "base2novel_test", "vit_b16","shots_16", f"seed_{seed}", "log.txt")
             if check_isfile(base_file):
                 base_accs.append(read_result(base_file))
             if check_isfile(novel_file):
@@ -67,7 +67,7 @@ def main():
     print("-" * 100)
     print(f"base: {np.mean(total_base_accs):.2f}")
     print(f"novel: {np.mean(total_novel_accs):.2f}")
-    print(f"hm: {np.mean(total_hm):.2f}")
+    print(f"hm: {hm(np.mean(total_base_accs), np.mean(total_novel_accs)):.2f}")
 
 if __name__ == "__main__":
     main()

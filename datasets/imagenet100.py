@@ -82,6 +82,9 @@ class ImageNet100(DatasetBase):
                     train_u = self.generate_fewshot_dataset(
                         train, num_shots=num_unlabeled_shots
                     )
+                    # 去除重复的数据
+                    train_x_impath = [item.impath for item in train_x]
+                    train_u = [item for item in train_u if item.impath not in train_x_impath]
                     data = {"train_x": train_x, "train_u": train_u}
                     print(f"Saving preprocessed few-shot data to {preprocessed}")
                     with open(preprocessed, "wb") as file:
@@ -89,9 +92,7 @@ class ImageNet100(DatasetBase):
                 subsample = cfg.DATASET.SUBSAMPLE_CLASSES
                 train_x, test = OxfordPets.subsample_classes(train_x, test, subsample=subsample)
                 
-                # 去除重复的数据
-                train_x_impath = [item.impath for item in train_x]
-                train_u = [item for item in train_u if item.impath not in train_x_impath]
+                
                 super().__init__(
                     train_x=train_x, train_u=train_u, val=test, test=test, cfg=cfg
                 )

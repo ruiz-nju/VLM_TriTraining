@@ -107,10 +107,7 @@ def get_result_base2new(dataset: str, classifier: str):
     if len(base_accs) == 3 and len(new_accs) == 3 and len(hm_accs) == 3:
         avg_base = np.mean(base_accs)
         avg_new = np.mean(new_accs)
-        avg_hm = np.mean(hm_accs)
-        std_base = np.std(base_accs)
-        std_new = np.std(new_accs)
-        std_hm = np.std(hm_accs)
+        avg_hm = hm(avg_base, avg_new)
         print(
             f"Dataset {dataset} Average: base: {avg_base * 100:.2f}, new: {avg_new * 100:.2f}, hm: {avg_hm * 100:.2f}"
         )

@@ -1,5 +1,5 @@
 DEVICE=0
-for dataset in eurosat
+for dataset in eurosat fgvc_aircraft ucf101 caltech101 dtd food101 oxford_flowers stanford_cars oxford_pets sun397 
 do 
     for seed in 1 2 3
     do 

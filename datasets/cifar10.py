@@ -79,18 +79,18 @@ class CIFAR10(DatasetBase):
                     val = self.generate_fewshot_dataset(
                         val, num_shots=min(num_shots, 4)
                     )
+                    # 去除重复的数据
+                    train_x_impath = [item.impath for item in train_x]
+                    train_u = [item for item in train_u if item.impath not in train_x_impath]
                     data = {"train_x": train_x, "train_u": train_u, "val": val}
                     print(f"Saving preprocessed few-shot data to {preprocessed}")
                     with open(preprocessed, "wb") as file:
                         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
-
+                
                 subsample = cfg.DATASET.SUBSAMPLE_CLASSES
                 train_x, val, test = OxfordPets.subsample_classes(
                     train_x, val, test, subsample=subsample
                 )
-                # 去除重复的数据
-                train_x_impath = [item.impath for item in train_x]
-                train_u = [item for item in train_u if item.impath not in train_x_impath]
                 super().__init__(
                     train_x=train_x, train_u=train_u, val=val, test=test, cfg=cfg
                 )

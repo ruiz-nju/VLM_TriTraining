@@ -256,7 +256,9 @@ class Tri_Training:
         print('基类置信度阈值:', base_confidence_bound)
         print('新类置信度阈值:', new_confidence_bound)
         j_confidence = self.calculate_confidence(j_logits)
+        print(f"模型 {j} 的置信度: {np.array2string(j_confidence, threshold=np.inf)}")
         k_confidence = self.calculate_confidence(k_logits)
+        print(f"模型 {k} 的置信度: {np.array2string(k_confidence, threshold=np.inf)}")
         ulb_y_j = np.where(
             (
                 (j_confidence > base_confidence_bound)
