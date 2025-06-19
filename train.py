@@ -175,6 +175,7 @@ def extend_cfg(cfg):
     cfg.TRAIN_OR_TEST = "train"
     cfg.INPUT.BASE_CONFIDENCE_BOUND = 0.9
     cfg.INPUT.NEW_CONFIDENCE_BOUND = 0.9
+    cfg.INPUT.CONFIDENCE_BOUND = 0.9
 
 
 def setup_cfg(args):

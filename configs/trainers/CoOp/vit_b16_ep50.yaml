@@ -27,3 +27,7 @@ TRAIN:
 MODEL:
   BACKBONE:
     NAME: "ViT-B/16"
+
+TRAINER:
+  COOP:
+    CTX_INIT: "a photo of a"

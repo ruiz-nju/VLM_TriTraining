@@ -277,10 +277,7 @@ def main(arg):
     if len(all_avg_base) == len(datasets):
         overall_avg_base = np.mean(all_avg_base)
         overall_avg_new = np.mean(all_avg_new)
-        overall_avg_hm = np.mean(all_avg_hm)
-        std_overall_base = np.std(all_avg_base)
-        std_overall_new = np.std(all_avg_new)
-        std_overall_hm = np.std(all_avg_hm)
+        overall_avg_hm = hm(overall_avg_base, overall_avg_new)
         print(
             f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, hm: {overall_avg_hm * 100:.2f}"
         )
@@ -316,9 +313,6 @@ def main(arg):
         overall_avg_base = np.mean(all_avg_base)
         overall_avg_new = np.mean(all_avg_new)
         overall_avg_all = np.mean(all_avg_all)
-        std_overall_base = np.std(all_avg_base)
-        std_overall_new = np.std(all_avg_new)
-        std_overall_all = np.std(all_avg_all)
         print(
             f"Overall Average: base: {overall_avg_base * 100:.2f}, new: {overall_avg_new * 100:.2f}, all: {overall_avg_all * 100:.2f}"
         )
